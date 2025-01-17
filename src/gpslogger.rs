@@ -75,7 +75,7 @@
 /// set the template to `%ALL` and allow user app updates to be handled in the server. This struct
 /// does no type conversion (e.g., for timestamps), and only stores data in the type in which it is
 /// received.
-use chrono::naive::serde::ts_seconds as deserialize_NaiveDateTime_from_sec;
+use chrono::naive::serde::ts_seconds as deserialize_naive_date_time_from_sec;
 use chrono::{DateTime, FixedOffset, NaiveDateTime, Utc};
 use color_eyre::eyre::{eyre, Result};
 use serde::de::{self, Deserializer};
@@ -100,7 +100,7 @@ where
 }
 
 /// Deserializer for `DateTime<FixedOffset>` from ISO 8601 strings.
-fn deserialize_DateTimeFixedOffset_from_str<'de, D>(
+fn deserialize_date_time_fixed_offset_from_str<'de, D>(
     deserializer: D,
 ) -> Result<DateTime<FixedOffset>, D::Error>
 where
@@ -111,7 +111,7 @@ where
 }
 
 /// Deserializer for `DateTime<Utc>` from ISO 8601 strings.
-fn deserialize_DateTimeUtc_from_sec<'de, D>(deserializer: D) -> Result<DateTime<Utc>, D::Error>
+fn deserialize_date_time_utc_from_sec<'de, D>(deserializer: D) -> Result<DateTime<Utc>, D::Error>
 where
     D: Deserializer<'de>,
 {
@@ -158,19 +158,19 @@ pub struct Payload {
     spd: f32,
     /// Unix timestamp of the data, second-precision.
     /// Example: `1736999691`.
-    #[serde(with = "deserialize_NaiveDateTime_from_sec")]
+    #[serde(with = "deserialize_naive_date_time_from_sec")]
     timestamp: NaiveDateTime,
     /// Time as an ISO 8601 string with offset.
     /// Example: `2025-01-15T20:54:51.000-07:00`.
-    #[serde(deserialize_with = "deserialize_DateTimeFixedOffset_from_str")]
+    #[serde(deserialize_with = "deserialize_date_time_fixed_offset_from_str")]
     timeoffset: DateTime<FixedOffset>,
     /// Time as an ISO 8601 string in UTC. It should be the same as `timestamp`.
     /// Example: `2025-01-16T03:54:51.000Z`.
-    #[serde(deserialize_with = "deserialize_DateTimeUtc_from_sec")]
+    #[serde(deserialize_with = "deserialize_date_time_utc_from_sec")]
     time: DateTime<Utc>,
     /// Unix timestamp of the start of the data collection event, second-precision.
     /// Example: `1737000139`.
-    #[serde(with = "deserialize_NaiveDateTime_from_sec")]
+    #[serde(with = "deserialize_naive_date_time_from_sec")]
     starttimestamp: NaiveDateTime,
     /// Date as an ISO 8601 string.
     /// Example: `2025-01-16`.
@@ -247,7 +247,9 @@ mod tests {
         assert_eq!(payload.spd, 0.0);
         assert_eq!(
             payload.timestamp,
-            NaiveDateTime::from_timestamp(1736999691, 0)
+            DateTime::<Utc>::from_timestamp(1736999691, 0)
+                .expect("")
+                .naive_utc()
         );
         assert_eq!(
             payload.timeoffset,
@@ -261,7 +263,9 @@ mod tests {
         );
         assert_eq!(
             payload.starttimestamp,
-            NaiveDateTime::from_timestamp(1737000139, 0)
+            DateTime::<Utc>::from_timestamp(1737000139, 0)
+                .expect("")
+                .naive_utc()
         );
         assert_eq!(payload.date, "2025-01-16");
         assert_eq!(payload.batt, 27.0);

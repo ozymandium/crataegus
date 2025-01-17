@@ -2,7 +2,6 @@ use std::path::PathBuf;
 
 use axum::{body::to_bytes, body::Body, http::Request, response::Response, routing::post, Router};
 use clap::Parser;
-use color_eyre::eyre::{eyre, Result};
 use log::{debug, error, info, warn};
 use tokio::net::TcpListener;
 
@@ -16,7 +15,7 @@ struct Args {
     port: u16,
     /// Path to the sqlite database file
     #[clap(short, long, default_value = "~/.local/cretaegus.sqlite", env = "CRATAEGUS_DB", value_hint = clap::ValueHint::FilePath)]
-    db: String,
+    db: PathBuf,
 }
 
 #[tokio::main]
@@ -53,12 +52,6 @@ async fn handle_gpslogger(request: Request<Body>) -> Response<Body> {
         .unwrap_or(0);
     let body_bytes = to_bytes(request.into_body(), content_length).await.unwrap();
     let body_str = String::from_utf8(body_bytes.to_vec()).unwrap();
-
-    //if let Ok(body) = serde_json::from_str::<gps_logger::Body>(&body_str) {
-    //    debug!("Parsed body: {:?}", body);
-    //} else {
-    //    warn!("Failed to parse body: {}", body_str);
-    //}
 
     // log an error if the body is not parseable. otherwise, parse payload.
     let _payload = match gpslogger::Payload::from_http_body(&body_str) {
