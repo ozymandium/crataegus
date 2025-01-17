@@ -61,8 +61,8 @@ async fn handle_gpslogger(request: Request<Body>) -> Response<Body> {
     //}
 
     // log an error if the body is not parseable. otherwise, parse payload.
-    let payload = match gpslogger::Payload::from_http_body(&body_str) {
-        Ok(payload) => payload,
+    let _payload = match gpslogger::Payload::from_http_body(&body_str) {
+        Ok(_payload) => _payload,
         Err(e) => {
             error!("Failed to parse body: {}", e);
             return Response::new(Body::from("Failed to parse body"));

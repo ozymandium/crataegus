@@ -1,28 +1,3 @@
-use chrono::naive::serde::ts_seconds;
-use chrono::NaiveDateTime;
-use color_eyre::eyre::{eyre, Result};
-use serde::de::{self, Deserializer};
-use serde::{Deserialize, Serialize};
-use serde_json::Value;
-
-/// Some fields are optional floats that may be empty. Give serde a way to deserialize those.
-///
-/// # Arguments
-/// * `deserializer` - The serde deserializer.
-///
-/// # Return
-/// An Option<f32> if the field is present, or None if it is not.
-fn deserialize_option_f32<'de, D>(deserializer: D) -> Result<Option<f32>, D::Error>
-where
-    D: Deserializer<'de>,
-{
-    let opt = Option::<String>::deserialize(deserializer)?;
-    match opt.as_deref() {
-        Some("") | None => Ok(None),
-        Some(s) => s.parse::<f32>().map(Some).map_err(de::Error::custom),
-    }
-}
-
 /// The body of the HTTP message is specified by a template that is configured in the GpsLogger app.
 /// Its value should be set to `%ALL`. This will result in a body string that looks like this:
 /// ```txt
@@ -100,6 +75,52 @@ where
 /// set the template to `%ALL` and allow user app updates to be handled in the server. This struct
 /// does no type conversion (e.g., for timestamps), and only stores data in the type in which it is
 /// received.
+use chrono::naive::serde::ts_seconds as deserialize_NaiveDateTime_from_sec;
+use chrono::{DateTime, FixedOffset, NaiveDateTime, Utc};
+use color_eyre::eyre::{eyre, Result};
+use serde::de::{self, Deserializer};
+use serde::Deserialize;
+
+/// Some fields are optional floats that may be empty. Give serde a way to deserialize those.
+///
+/// # Arguments
+/// * `deserializer` - The serde deserializer.
+///
+/// # Return
+/// An Option<f32> if the field is present, or None if it is not.
+fn deserialize_option_f32<'de, D>(deserializer: D) -> Result<Option<f32>, D::Error>
+where
+    D: Deserializer<'de>,
+{
+    let opt = Option::<String>::deserialize(deserializer)?;
+    match opt.as_deref() {
+        Some("") | None => Ok(None),
+        Some(s) => s.parse::<f32>().map(Some).map_err(de::Error::custom),
+    }
+}
+
+/// Deserializer for `DateTime<FixedOffset>` from ISO 8601 strings.
+fn deserialize_DateTimeFixedOffset_from_str<'de, D>(
+    deserializer: D,
+) -> Result<DateTime<FixedOffset>, D::Error>
+where
+    D: Deserializer<'de>,
+{
+    let s = String::deserialize(deserializer)?;
+    DateTime::parse_from_rfc3339(&s).map_err(de::Error::custom)
+}
+
+/// Deserializer for `DateTime<Utc>` from ISO 8601 strings.
+fn deserialize_DateTimeUtc_from_sec<'de, D>(deserializer: D) -> Result<DateTime<Utc>, D::Error>
+where
+    D: Deserializer<'de>,
+{
+    let s = String::deserialize(deserializer)?;
+    DateTime::parse_from_rfc3339(&s)
+        .map(|dt| dt.with_timezone(&Utc))
+        .map_err(de::Error::custom)
+}
+
 #[derive(Deserialize, Debug)]
 pub struct Payload {
     /// Latitude in decimal degrees.
@@ -137,17 +158,19 @@ pub struct Payload {
     spd: f32,
     /// Unix timestamp of the data, second-precision.
     /// Example: `1736999691`.
-    #[serde(with = "ts_seconds")]
+    #[serde(with = "deserialize_NaiveDateTime_from_sec")]
     timestamp: NaiveDateTime,
     /// Time as an ISO 8601 string with offset.
     /// Example: `2025-01-15T20:54:51.000-07:00`.
-    timeoffset: String,
-    /// Time as an ISO 8601 string in UTC.
+    #[serde(deserialize_with = "deserialize_DateTimeFixedOffset_from_str")]
+    timeoffset: DateTime<FixedOffset>,
+    /// Time as an ISO 8601 string in UTC. It should be the same as `timestamp`.
     /// Example: `2025-01-16T03:54:51.000Z`.
-    time: String,
+    #[serde(deserialize_with = "deserialize_DateTimeUtc_from_sec")]
+    time: DateTime<Utc>,
     /// Unix timestamp of the start of the data collection event, second-precision.
     /// Example: `1737000139`.
-    #[serde(with = "ts_seconds")]
+    #[serde(with = "deserialize_NaiveDateTime_from_sec")]
     starttimestamp: NaiveDateTime,
     /// Date as an ISO 8601 string.
     /// Example: `2025-01-16`.
@@ -222,14 +245,20 @@ mod tests {
         assert_eq!(payload.prov, "gps");
         assert_eq!(payload.spd_kph, 0.0);
         assert_eq!(payload.spd, 0.0);
-        //assert_eq!(payload.timestamp, 1736999691);
         assert_eq!(
             payload.timestamp,
             NaiveDateTime::from_timestamp(1736999691, 0)
         );
-        assert_eq!(payload.timeoffset, "2025-01-15T20:54:51.000-07:00");
-        assert_eq!(payload.time, "2025-01-16T03:54:51.000Z");
-        //assert_eq!(payload.starttimestamp, 1737000139);
+        assert_eq!(
+            payload.timeoffset,
+            DateTime::<FixedOffset>::parse_from_rfc3339("2025-01-15T20:54:51.000-07:00").expect("")
+        );
+        assert_eq!(
+            payload.time,
+            DateTime::<FixedOffset>::parse_from_rfc3339("2025-01-16T03:54:51.000Z")
+                .expect("")
+                .to_utc()
+        );
         assert_eq!(
             payload.starttimestamp,
             NaiveDateTime::from_timestamp(1737000139, 0)

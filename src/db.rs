@@ -2,7 +2,6 @@ use chrono::naive::serde::ts_seconds;
 use chrono::NaiveDateTime;
 
 use serde::{Deserialize, Serialize};
-use serde_json::Value;
 
 /// A database entry
 #[derive(Deserialize, Serialize, Debug)]
