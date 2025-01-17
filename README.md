@@ -18,5 +18,4 @@ Crataegus
 - input sanitization
 - set log level on sqlx queries to debug
 - check for duplicates before adding
-- should accuracy
-
+- figure out how to access profile settings saved from GpsLogger

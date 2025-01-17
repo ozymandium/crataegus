@@ -19,6 +19,8 @@ sea-orm = { version = "1.1.4", features = ["sqlx-sqlite", "runtime-tokio-rustls"
 axum-auth = { version = "0.8.1", features = ["auth-basic"] }
 inquire = "0.7.5"
 
+[dev-dependencies]
+tempfile = "3.15.0"
 
 # https://docs.rs/color-eyre/latest/color_eyre/#improving-perf-on-debug-builds
 [profile.dev.package.backtrace]

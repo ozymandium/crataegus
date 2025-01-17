@@ -120,7 +120,6 @@ impl Server {
             }
         };
         let location = Location {
-            id: 0, // This is a placeholder, will be set by the database
             username: username,
             time: payload.timestamp,
             latitude: payload.lat,
