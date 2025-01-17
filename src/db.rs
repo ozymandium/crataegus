@@ -34,10 +34,6 @@ impl Db {
             info!("Database does not exist, creating it");
             let schema = Schema::new(db.get_database_backend());
             // add all the tables
-            //let statement = schema.create_table_from_entity(location::Entity);
-            //db.execute(db.get_database_backend().build(&statement))
-            //    .await
-            //    .wrap_err("Failed to create the entries table")?;
             db.execute(
                 db.get_database_backend()
                     .build(&schema.create_table_from_entity(user::Entity)),
@@ -49,7 +45,7 @@ impl Db {
                     .build(&schema.create_table_from_entity(location::Entity)),
             )
             .await
-            .wrap_err("Failed to create the entries table")?;
+            .wrap_err("Failed to create the locations table")?;
         }
         Ok(Db { db })
     }
@@ -82,13 +78,11 @@ impl Db {
     }
 
     pub async fn check_user(&self, username: &String, password: &String) -> Result<bool> {
-        debug!("Checking user/pass: {}/{}", username, password);
         let user = user::Entity::find()
             .filter(user::Column::Username.eq(username))
             .one(&self.db)
             .await
             .wrap_err("Failed to query user from database")?;
-        debug!("Found user/pass: {:?}", user);
         match user {
             Some(user) => Ok(user.password == *password),
             None => Ok(false),

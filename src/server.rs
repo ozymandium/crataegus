@@ -87,7 +87,6 @@ impl Server {
             warn!("Failed to authenticate user: {}", username);
             return Response::builder().status(401).body(Body::empty()).unwrap();
         }
-        debug!("User authenticated: {}", username);
         // Add the authenticated user to the request extensions
         request
             .extensions_mut()
@@ -117,7 +116,6 @@ impl Server {
             Ok(payload) => payload,
             Err(e) => {
                 error!("Failed to parse body: {}", e);
-                todo!("Ntfy");
                 return Response::new(Body::from("Failed to parse body"));
             }
         };
@@ -131,7 +129,6 @@ impl Server {
             altitude: payload.alt,
         };
         server.db.record(location).await.unwrap();
-        todo!("Ntfy / error handling");
         Response::new(Body::from("Request received"))
     }
 
@@ -140,7 +137,6 @@ impl Server {
         request: Request<Body>,
     ) -> Response<Body> {
         warn!("Fallback handler triggered. Request:\n{:#?}", request);
-        todo!("Ntfy");
         Response::new(Body::from("Fallback response"))
     }
 }

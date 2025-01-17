@@ -1,8 +1,9 @@
 use std::path::PathBuf;
 use std::sync::Arc;
 
-use clap::Parser;
+use clap::{Parser, Subcommand};
 use color_eyre::eyre::{eyre, Result};
+use inquire::{Password, Text};
 use log::info;
 use serde::Deserialize;
 
@@ -15,6 +16,9 @@ struct Args {
     /// Path to the TOML configuration file.
     #[clap(short, long, env = "CRATAEGUS_CONFIG", default_value = "~/.config/crataegus.toml", value_hint = clap::ValueHint::FilePath)]
     config: PathBuf,
+
+    #[clap(subcommand)]
+    cmd: Cmd,
 }
 
 /// Configuration for the server, obtained from main.rs::Args
@@ -22,6 +26,14 @@ struct Args {
 pub struct Config {
     http: ServerConfig,
     db: DbConfig,
+}
+
+#[derive(Subcommand, Debug)]
+enum Cmd {
+    /// Start the server
+    Serve,
+    /// Add a user to the database
+    Useradd,
 }
 
 /// Implementation of the Config struct
@@ -43,6 +55,25 @@ impl Config {
     }
 }
 
+async fn serve(config: Config) -> Result<()> {
+    info!("Starting Crataegus server");
+    let db = Arc::new(Db::new(config.db).await?);
+    let server = Server::new(config.http, db);
+    server.serve().await?;
+    Ok(())
+}
+
+async fn useradd(config: Config) -> Result<()> {
+    println!("Adding a user to the database");
+    let db = Arc::new(Db::new(config.db).await?);
+    println!("Connected to the database. Enter the user information:");
+    let username = Text::new("Username").prompt()?;
+    let password = Password::new("Password").prompt()?;
+    db.add_user(&username, &password).await?;
+    println!("User added successfully");
+    Ok(())
+}
+
 #[tokio::main]
 async fn main() -> Result<()> {
     color_eyre::install().unwrap();
@@ -54,10 +85,10 @@ async fn main() -> Result<()> {
     let config = Config::load(&args.config)?;
     info!("{:#?}", config);
 
-    let db = Arc::new(Db::new(config.db).await?);
-
-    let server = Server::new(config.http, db);
-    server.serve().await?;
+    match args.cmd {
+        Cmd::Serve => serve(config).await?,
+        Cmd::Useradd => useradd(config).await?,
+    }
 
     info!("Crataegus has stopped");
     Ok(())
