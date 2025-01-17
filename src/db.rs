@@ -180,5 +180,15 @@ mod tests {
         assert_eq!(db.location_count().await, 1);
         let err = db.record(loc.clone()).await.unwrap_err();
         assert_eq!(err.to_string(), "Failed to insert location into database");
+        let loc2 = Location {
+            username: "test".to_string(),
+            time: chrono::Utc::now().naive_utc() + chrono::Duration::seconds(1),
+            latitude: 0.0,
+            longitude: 0.0,
+            altitude: 0.0,
+            accuracy: 0.0,
+        };
+        db.record(loc2).await.unwrap();
+        assert_eq!(db.location_count().await, 2);
     }
 }
