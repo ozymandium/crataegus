@@ -151,9 +151,11 @@ pub struct Payload {
     pub lon: f64,
     /// Number of satellites in use/visible (unclear).
     /// Example: `0`.
+    #[allow(dead_code)]
     sat: u8,
     /// Description of the data collection event to which this data belongs.
     /// Example: `""`, `"Hiking"`.
+    #[allow(dead_code)]
     desc: String,
     /// Altitude in meters, using WGS84. Note that MSL must be set false in settings.
     /// Example: `1387.0`.
@@ -166,15 +168,19 @@ pub struct Payload {
     /// presumably direction of travel (angle of velocity vector), but may be the fused estimate of
     /// phone orientation.
     /// Example: `170.8125`.
+    #[allow(dead_code)]
     dir: f32,
     /// Provider of the location data. Known possible values are:
     /// - `"gps"`: GPS location data
+    #[allow(dead_code)]
     prov: String,
     /// Speed in kilometers per hour.
     /// Example: `0.0`.
+    #[allow(dead_code)]
     spd_kph: f32,
     /// Speed in (meters per second?).
     /// Example: `0.0`.
+    #[allow(dead_code)]
     spd: f32,
     /// Unix timestamp of the data, second-precision.
     /// Example: `1736999691`.
@@ -183,52 +189,66 @@ pub struct Payload {
     /// Time as an ISO 8601 string with offset.
     /// Example: `2025-01-15T20:54:51.000-07:00`.
     #[serde(deserialize_with = "deserialize_date_time_fixed_offset_from_str")]
+    #[allow(dead_code)]
     timeoffset: DateTime<FixedOffset>,
     /// Time as an ISO 8601 string in UTC. It should be the same as `timestamp`.
     /// Example: `2025-01-16T03:54:51.000Z`.
     #[serde(deserialize_with = "deserialize_date_time_utc_from_sec")]
+    #[allow(dead_code)]
     time: DateTime<Utc>,
     /// Unix timestamp of the start of the data collection event, second-precision.
     /// Example: `1737000139`.
     #[serde(with = "deserialize_naive_date_time_from_sec")]
+    #[allow(dead_code)]
     starttimestamp: NaiveDateTime,
     /// Date as an ISO 8601 string.
     /// Example: `2025-01-16`.
     #[serde(deserialize_with = "deserialize_date_from_str")]
+    #[allow(dead_code)]
     date: NaiveDate,
     /// Battery percentage.
     /// Example: `27.0`.
+    #[allow(dead_code)]
     batt: f32,
     /// Whether the device is charging.
     /// Example: `false`.
+    #[allow(dead_code)]
     ischarging: bool,
     /// Android ID
     /// Example: `4ca9e1da592aca9b`.
+    #[allow(dead_code)]
     aid: String,
     /// Serial number
     /// Example: `4ca9e1da592aca9b`.
+    #[allow(dead_code)]
     ser: String,
     /// File name of the data collection event on the phone.
     /// Example: `20250115`.
+    #[allow(dead_code)]
     filename: String,
     /// Profile name of the data collection event on the phone.
     /// Example: `Default Profile`.
+    #[allow(dead_code)]
     profile: String,
     /// Horizontal dilution of precision. May not be present.
     /// Example: ``, `1.0`.
     #[serde(deserialize_with = "deserialize_option_f32")]
+    #[allow(dead_code)]
     hdop: Option<f32>,
     /// Vertical dilution of precision. May not be present.
     /// Example: ``, `1.0`.
     #[serde(deserialize_with = "deserialize_option_f32")]
+    #[allow(dead_code)]
     vdop: Option<f32>,
     /// Position dilution of precision. May not be present.
     /// Example: ``, `1.0`.
     #[serde(deserialize_with = "deserialize_option_f32")]
+    #[allow(dead_code)]
     pdop: Option<f32>,
     /// Distance traveled. Unclear whether this is distance from last data point, distance from
     /// last sent point, or distance since start of data collection event.
     /// Example: `0`.
+    #[allow(dead_code)]
     dist: f32,
 }
 

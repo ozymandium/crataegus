@@ -10,7 +10,7 @@ use axum::{
     Router,
 };
 use axum_auth::AuthBasic;
-use color_eyre::eyre::{eyre, Result, WrapErr};
+use color_eyre::eyre::{Result, WrapErr};
 use log::{debug, error, info, warn};
 use serde::Deserialize;
 use tokio::net::TcpListener;

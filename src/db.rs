@@ -1,6 +1,5 @@
 use color_eyre::eyre::{Result, WrapErr};
-use log::{debug, info};
-use sea_orm::sea_query::{Table, TableCreateStatement};
+use log::info;
 use sea_orm::{
     ActiveModelTrait, ColumnTrait, ConnectionTrait, Database, DatabaseConnection, EntityTrait,
     IntoActiveModel, QueryFilter, Schema,
@@ -86,12 +85,6 @@ impl Db {
             Some(user) => Ok(user.password == *password),
             None => Ok(false),
         }
-    }
-
-    /// Backup the database
-    pub async fn backup(&self, path: PathBuf) -> Result<()> {
-        todo!("implement VACUUM and backup");
-        Ok(())
     }
 
     //////////////////
