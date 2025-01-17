@@ -100,6 +100,12 @@ where
 }
 
 /// Deserializer for `DateTime<FixedOffset>` from ISO 8601 strings.
+///
+/// # Arguments
+/// * `deserializer` - The serde deserializer.
+///
+/// # Return
+/// A DateTime<FixedOffset> if the string is parseable, or an error if it is not.
 fn deserialize_date_time_fixed_offset_from_str<'de, D>(
     deserializer: D,
 ) -> Result<DateTime<FixedOffset>, D::Error>
@@ -111,6 +117,12 @@ where
 }
 
 /// Deserializer for `DateTime<Utc>` from ISO 8601 strings.
+///
+/// # Arguments
+/// * `deserializer` - The serde deserializer.
+///
+/// # Return
+/// A DateTime<Utc> if the string is parseable, or an error if it is not.
 fn deserialize_date_time_utc_from_sec<'de, D>(deserializer: D) -> Result<DateTime<Utc>, D::Error>
 where
     D: Deserializer<'de>,
