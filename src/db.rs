@@ -28,12 +28,25 @@ pub struct Config {
 pub struct Db {}
 
 impl Db {
-    pub async fn new(db: Config) -> Self {
+    pub async fn new(config: Config) -> Self {
+        // if the database does not exist, create it
+        if !config.path.exists() {
+            todo!();
+        }
+        // now connect to the database for writing and reading
         todo!();
         Db {}
     }
 
+    /// Record a new entry in the database
+    /// # Arguments
+    /// * `entry`: the entry to record
     pub async fn record(&self, entry: Entry) {
+        todo!();
+    }
+
+    /// Backup the database
+    pub async fn backup(&self) {
         todo!();
     }
 }

@@ -10,52 +10,27 @@ use tokio::net::TcpListener;
 use std::path::PathBuf;
 use std::sync::Arc;
 
-use crate::db::{Config as DbConfig, Db, Entry};
+use crate::db::{Db, Entry};
 use crate::gpslogger;
 
-#[derive(Debug, Deserialize)]
-pub struct HttpConfig {
-    port: u16,
-}
-
-/// Configuration for the server, obtained from main.rs::Args
+/// Configuration for the server
 #[derive(Debug, Deserialize)]
 pub struct Config {
-    http: HttpConfig,
-    db: DbConfig,
-}
-
-/// Implementation of the Config struct
-impl Config {
-    /// Load the configuration from a TOML file
-    ///
-    /// # Arguments
-    /// * `path`: path to the TOML file
-    ///
-    /// # Returns
-    /// The configuration struct
-    pub fn load(path: &PathBuf) -> Result<Config> {
-        if !path.exists() {
-            return Err(eyre!("Config file does not exist: {}", path.display()));
-        }
-        let content = std::fs::read_to_string(path)?;
-        let config: Config = toml::from_str(&content)?;
-        Ok(config)
-    }
+    /// Port to listen on  
+    port: u16,
 }
 
 /// The server struct
 pub struct Server {
-    config: HttpConfig,
-    db: Db,
+    /// Configuration for the server
+    config: Config,
+    /// Database connection
+    db: Arc<Db>,
 }
 
 impl Server {
-    pub async fn new(config: Config) -> Self {
-        Self {
-            config: config.http,
-            db: Db::new(config.db).await,
-        }
+    pub fn new(config: Config, db: Arc<Db>) -> Self {
+        Server { config, db }
     }
 
     pub async fn serve(self) -> Result<()> {
@@ -93,6 +68,7 @@ impl Server {
         request: Request<Body>,
     ) -> Response<Body> {
         debug!("Request received: {:?}", request);
+        todo!("Add user, from http basic auth");
         let body = Self::get_body_string(request).await;
         let payload = match gpslogger::Payload::from_http_body(&body) {
             Ok(payload) => payload,
