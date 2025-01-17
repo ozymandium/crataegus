@@ -14,4 +14,9 @@ chrono = { version = "0.4.39", features = ["serde"] }
 log = "0.4.22"
 env_logger = "0.11.6"
 color-eyre = "0.6.3"
+toml = "0.8.19"
+
+# https://docs.rs/color-eyre/latest/color_eyre/#improving-perf-on-debug-builds
+[profile.dev.package.backtrace]
+opt-level = 3
 

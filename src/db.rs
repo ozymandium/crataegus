@@ -1,13 +1,12 @@
-use chrono::naive::serde::ts_seconds;
 use chrono::NaiveDateTime;
+use serde::Deserialize;
 
-use serde::{Deserialize, Serialize};
+use std::path::PathBuf;
 
 /// A database entry
-#[derive(Deserialize, Serialize, Debug)]
+#[derive(Debug)]
 pub struct Entry {
     /// Timestamp of the location data
-    #[serde(with = "ts_seconds")]
     time: NaiveDateTime,
     /// Latitude in decimal degrees
     latitude: f64,
@@ -17,4 +16,24 @@ pub struct Entry {
     altitude: f64,
     /// Estimate of the accuracy of the location in meters
     accuracy: f64,
+}
+
+#[derive(Deserialize, Debug)]
+pub struct Config {
+    path: PathBuf,
+    user: String,
+    password: String,
+}
+
+pub struct Db {}
+
+impl Db {
+    pub async fn new(db: Config) -> Self {
+        todo!();
+        Db {}
+    }
+
+    pub async fn record(&self, entry: Entry) {
+        todo!();
+    }
 }
