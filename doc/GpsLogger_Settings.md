@@ -1,6 +1,12 @@
 GpsLogger Settings
 ===
-
+## To Do
+- Basic password auth for different users
+- get rid of unwrap / graceful error handling
+- figure out sqlite backup
+    - rusqlite has backup integration as a feature
+    - how to integrate into restic?
+- swap to time crate instead of chrono crate? More modern, maybe less compatibility
 ## Settings
 ### General Options
 - Start on bootup: true
@@ -17,18 +23,13 @@ GpsLogger Settings
 - Allow auto sending: true
 - Discard offline locations: false
 ##### HTTP Body
-```json
-{
-    "time": %TIMESTAMP,
-    "latitude": %LAT,
-    "longitude": %LON,
-    "altitude": %ALT,
-    "accuracy": %ACC
-}
 ```
+%ALL
+```
+This will spit all available fields, but in a format that cannot be 
 ##### HTTP Headers
 ```
-Content-Type: application/json
+Content-Type: application/x-www-form-urlencoded
 ```
 ### Performance
 - Log GPS/GNSS Locations: true

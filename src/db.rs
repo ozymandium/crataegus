@@ -4,11 +4,9 @@ use chrono::NaiveDateTime;
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
 
-/// The body of the HTTP message is specified by a template. See doc/GpsLogger_Settings.md for the
-/// proper value that should be set for the template, which is in JSON format. This struct is used
-/// to parse the JSON template into a Rust struct.
+/// A database entry
 #[derive(Deserialize, Serialize, Debug)]
-pub struct Body {
+pub struct Entry {
     /// Timestamp of the location data
     #[serde(with = "ts_seconds")]
     time: NaiveDateTime,
