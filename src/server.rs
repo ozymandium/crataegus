@@ -78,7 +78,7 @@ impl Server {
                 return Response::new(Body::from("Failed to parse body"));
             }
         };
-        let location = Location{
+        let location = Location {
             id: 0, // This is a placeholder
             time: payload.timestamp,
             latitude: payload.lat,

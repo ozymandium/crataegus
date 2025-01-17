@@ -76,7 +76,7 @@
 /// does no type conversion (e.g., for timestamps), and only stores data in the type in which it is
 /// received.
 use chrono::naive::serde::ts_seconds as deserialize_naive_date_time_from_sec;
-use chrono::{DateTime, FixedOffset, NaiveDateTime, Utc, NaiveDate};
+use chrono::{DateTime, FixedOffset, NaiveDate, NaiveDateTime, Utc};
 use color_eyre::eyre::{eyre, Result};
 use serde::de::{self, Deserializer};
 use serde::Deserialize;

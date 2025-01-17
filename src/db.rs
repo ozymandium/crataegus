@@ -1,11 +1,11 @@
 use chrono::{Local, NaiveDateTime};
 use color_eyre::eyre::{Result, WrapErr};
+use log::info;
 use sea_orm::{
-    ActiveModelTrait, ActiveValue::NotSet, Database, DatabaseConnection, EntityTrait,
-    IntoActiveModel, Schema, ConnectionTrait,
+    ActiveModelTrait, ActiveValue::NotSet, ConnectionTrait, Database, DatabaseConnection,
+    EntityTrait, IntoActiveModel, Schema,
 };
 use serde::Deserialize;
-use log::info;
 
 use std::path::PathBuf;
 
@@ -27,8 +27,8 @@ pub struct Db {
 impl Db {
     pub async fn new(config: Config) -> Result<Self> {
         let db_exists = config.path.exists();
-        let db_url = format!("sqlite://{}", config.path.display());
-        // Connect to the database (it will create the file if it doesn't exist)
+        let db_url = format!("sqlite://{}?mode=rwc", config.path.display());
+        // Connect to the database (it will create the file if it doesn't exist, for sqlite)
         let db = Database::connect(&db_url)
             .await
             .wrap_err("Failed to connect to the database")?;
