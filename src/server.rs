@@ -2,7 +2,7 @@ use axum::{
     body::to_bytes, body::Body, extract::State, http::Request, response::Response, routing::post,
     Router,
 };
-use color_eyre::eyre::{eyre, Result};
+use color_eyre::eyre::{eyre, Result, WrapErr};
 use log::{debug, error, info, warn};
 use serde::Deserialize;
 use tokio::net::TcpListener;
@@ -58,7 +58,7 @@ impl Server {
         }
     }
 
-    pub async fn serve(self) {
+    pub async fn serve(self) -> Result<()> {
         let server = Arc::new(self);
         let router = Router::new()
             .route("/gpslogger", post(Self::handle_gpslogger))
@@ -67,9 +67,14 @@ impl Server {
 
         let addr = format!("0.0.0.0:{}", server.config.port);
         info!("Listening on {}", addr);
-        let listener = TcpListener::bind(&addr).await.unwrap();
+        let listener = TcpListener::bind(&addr)
+            .await
+            .wrap_err("Failed to bind to address")?;
 
-        axum::serve(listener, router).await.unwrap();
+        axum::serve(listener, router)
+            .await
+            .wrap_err("Failed to serve")?;
+        Ok(()) // This is unreachable
     }
 
     async fn get_body_string(request: Request<Body>) -> String {

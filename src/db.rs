@@ -3,7 +3,7 @@ use serde::Deserialize;
 
 use std::path::PathBuf;
 
-/// A database entry
+/// A database entry. Each row has this structure.
 #[derive(Debug)]
 pub struct Entry {
     /// Timestamp of the location data

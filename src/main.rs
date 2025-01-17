@@ -1,8 +1,8 @@
 use std::path::PathBuf;
 
 use clap::Parser;
+use color_eyre::eyre::Result;
 use log::info;
-use serde::Deserialize;
 
 use crataegus::server::{Config, Server};
 
@@ -15,17 +15,18 @@ struct Args {
 }
 
 #[tokio::main]
-async fn main() {
+async fn main() -> Result<()> {
     color_eyre::install().unwrap();
     env_logger::init();
 
     let args = Args::parse();
     info!("Starting Crataegus with args:\n{:#?}", args);
 
-    let config = Config::load(&args.config).unwrap();
+    let config = Config::load(&args.config)?;
 
     let server = Server::new(config).await;
-    server.serve().await;
+    server.serve().await?;
 
     info!("Crataegus has stopped");
+    Ok(())
 }
