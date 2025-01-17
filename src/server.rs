@@ -1,7 +1,15 @@
 use axum::{
-    body::to_bytes, body::Body, extract::State, http::Request, response::Response, routing::post,
+    body::to_bytes,
+    body::Body,
+    extract::Extension,
+    extract::State,
+    http::Request,
+    middleware::{self, Next},
+    response::Response,
+    routing::post,
     Router,
 };
+use axum_auth::AuthBasic;
 use color_eyre::eyre::{eyre, Result, WrapErr};
 use log::{debug, error, info, warn};
 use serde::Deserialize;
@@ -28,6 +36,12 @@ pub struct Server {
     db: Arc<Db>,
 }
 
+/// Struct to hold the authenticated user as an extension for protected routes
+#[derive(Clone)]
+struct AuthenticatedUser {
+    username: String,
+}
+
 impl Server {
     pub fn new(config: Config, db: Arc<Db>) -> Self {
         Server { config, db }
@@ -35,8 +49,12 @@ impl Server {
 
     pub async fn serve(self) -> Result<()> {
         let server = Arc::new(self);
-        let router = Router::new()
+        let protected_routes = Router::new()
             .route("/gpslogger", post(Self::handle_gpslogger))
+            //.layer(middleware::from_fn(Self::auth)); // leave this line last
+            .layer(middleware::from_fn_with_state(server.clone(), Self::auth));
+        let router = Router::new()
+            .merge(protected_routes)
             .fallback(Self::handle_fallback)
             .with_state(server.clone());
 
@@ -52,6 +70,24 @@ impl Server {
         Ok(()) // This is unreachable
     }
 
+    /// Middleware layer to check for HTTP basic auth
+    async fn auth(
+        State(server): State<Arc<Server>>,
+        AuthBasic((username, password)): AuthBasic,
+        mut request: Request<Body>,
+        next: Next,
+    ) -> Response<Body> {
+        debug!("Authenticating user: {}", username);
+        let good = server.db.check_user(&username, &password.unwrap_or_default()).await.unwrap();
+        if !good {
+            warn!("Failed to authenticate user: {}", username);
+        }
+        debug!("User authenticated: {}", username);
+        // Add the authenticated user to the request extensions
+        request.extensions_mut().insert(AuthenticatedUser { username });
+        next.run(request).await
+    }
+
     async fn get_body_string(request: Request<Body>) -> String {
         let content_length = request
             .headers()
@@ -65,6 +101,7 @@ impl Server {
 
     async fn handle_gpslogger(
         State(server): State<Arc<Server>>,
+        Extension(AuthenticatedUser { username }): Extension<AuthenticatedUser>,
         request: Request<Body>,
     ) -> Response<Body> {
         debug!("Request received: {:?}", request);
@@ -79,7 +116,8 @@ impl Server {
             }
         };
         let location = Location {
-            id: 0, // This is a placeholder
+            id: 0, // This is a placeholder, will be set by the database
+            username: username,
             time: payload.timestamp,
             latitude: payload.lat,
             longitude: payload.lon,

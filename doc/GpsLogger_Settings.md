@@ -1,12 +1,5 @@
 GpsLogger Settings
 ===
-## To Do
-- Basic password auth for different users
-- get rid of unwrap / graceful error handling
-- figure out sqlite backup
-    - rusqlite has backup integration as a feature
-    - how to integrate into restic?
-- swap to time crate instead of chrono crate? More modern, maybe less compatibility
 ## Settings
 ### General Options
 - Start on bootup: true
