@@ -49,9 +49,10 @@ async fn main() -> Result<()> {
     env_logger::init();
 
     let args = Args::parse();
-    info!("Starting Crataegus with args:\n{:#?}", args);
+    info!("{:#?}", args);
 
     let config = Config::load(&args.config)?;
+    info!("{:#?}", config);
 
     let db = Arc::new(Db::new(config.db).await);
 
