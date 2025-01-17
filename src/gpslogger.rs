@@ -100,7 +100,7 @@ where
 /// set the template to `%ALL` and allow user app updates to be handled in the server. This struct
 /// does no type conversion (e.g., for timestamps), and only stores data in the type in which it is
 /// received.
-#[derive(Deserialize, Serialize, Debug)]
+#[derive(Deserialize, Debug)]
 pub struct Payload {
     /// Latitude in decimal degrees.
     /// Example: `41.74108695983887`.
@@ -137,7 +137,8 @@ pub struct Payload {
     spd: f32,
     /// Unix timestamp of the data, second-precision.
     /// Example: `1736999691`.
-    timestamp: u64,
+    #[serde(with = "ts_seconds")]
+    timestamp: NaiveDateTime,
     /// Time as an ISO 8601 string with offset.
     /// Example: `2025-01-15T20:54:51.000-07:00`.
     timeoffset: String,
@@ -146,7 +147,8 @@ pub struct Payload {
     time: String,
     /// Unix timestamp of the start of the data collection event, second-precision.
     /// Example: `1737000139`.
-    starttimestamp: u64,
+    #[serde(with = "ts_seconds")]
+    starttimestamp: NaiveDateTime,
     /// Date as an ISO 8601 string.
     /// Example: `2025-01-16`.
     date: String,
@@ -205,6 +207,7 @@ impl Payload {
 mod tests {
     use super::*;
 
+    /// An actual body string observed from the GpsLogger app.
     #[test]
     fn test_from_http_body() {
         let body_str = "lat=41.74108695983887&lon=-91.84490871429443&sat=0&desc=&alt=1387.0&acc=6.0&dir=170.8125&prov=gps&spd_kph=0.0&spd=0.0&timestamp=1736999691&timeoffset=2025-01-15T20:54:51.000-07:00&time=2025-01-16T03:54:51.000Z&starttimestamp=1737000139&date=2025-01-16&batt=27.0&ischarging=false&aid=4ca9e1da592aca9b&ser=4ca9e1da592aca9b&act=&filename=20250115&profile=Default+Profile&hdop=&vdop=&pdop=&dist=0".to_string();
@@ -219,10 +222,18 @@ mod tests {
         assert_eq!(payload.prov, "gps");
         assert_eq!(payload.spd_kph, 0.0);
         assert_eq!(payload.spd, 0.0);
-        assert_eq!(payload.timestamp, 1736999691);
+        //assert_eq!(payload.timestamp, 1736999691);
+        assert_eq!(
+            payload.timestamp,
+            NaiveDateTime::from_timestamp(1736999691, 0)
+        );
         assert_eq!(payload.timeoffset, "2025-01-15T20:54:51.000-07:00");
         assert_eq!(payload.time, "2025-01-16T03:54:51.000Z");
-        assert_eq!(payload.starttimestamp, 1737000139);
+        //assert_eq!(payload.starttimestamp, 1737000139);
+        assert_eq!(
+            payload.starttimestamp,
+            NaiveDateTime::from_timestamp(1737000139, 0)
+        );
         assert_eq!(payload.date, "2025-01-16");
         assert_eq!(payload.batt, 27.0);
         assert_eq!(payload.ischarging, false);
