@@ -54,7 +54,7 @@ impl Db {
 
     /// Record a new location in the database
     pub async fn record(&self, loc: Location) -> Result<()> {
-        let mut active_loc = loc.into_active_model();
+        let active_loc = loc.into_active_model();
         active_loc
             .insert(&self.conn)
             .await
@@ -63,12 +63,12 @@ impl Db {
         Ok(())
     }
 
-    pub async fn add_user(&self, username: &String, password: &String) -> Result<()> {
+    pub async fn user_add(&self, username: &String, password: &String) -> Result<()> {
         let user = user::Model {
             username: username.clone(),
             password: password.clone(),
         };
-        let mut active_user = user.into_active_model();
+        let active_user = user.into_active_model();
         active_user
             .insert(&self.conn)
             .await

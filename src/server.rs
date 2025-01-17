@@ -15,7 +15,6 @@ use log::{debug, error, info, warn};
 use serde::Deserialize;
 use tokio::net::TcpListener;
 
-use std::path::PathBuf;
 use std::sync::Arc;
 
 use crate::db::{Db, Location};
@@ -131,10 +130,7 @@ impl Server {
         Response::new(Body::from("Request received"))
     }
 
-    async fn handle_fallback(
-        State(server): State<Arc<Server>>,
-        request: Request<Body>,
-    ) -> Response<Body> {
+    async fn handle_fallback(request: Request<Body>) -> Response<Body> {
         warn!("Fallback handler triggered. Request:\n{:#?}", request);
         Response::new(Body::from("Fallback response"))
     }

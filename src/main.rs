@@ -69,7 +69,7 @@ async fn useradd(config: Config) -> Result<()> {
     println!("Connected to the database. Enter the user information:");
     let username = Text::new("Username").prompt()?;
     let password = Password::new("Password").prompt()?;
-    db.add_user(&username, &password).await?;
+    db.user_add(&username, &password).await?;
     println!("User added successfully");
     Ok(())
 }
