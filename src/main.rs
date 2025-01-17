@@ -54,7 +54,7 @@ async fn main() -> Result<()> {
     let config = Config::load(&args.config)?;
     info!("{:#?}", config);
 
-    let db = Arc::new(Db::new(config.db).await);
+    let db = Arc::new(Db::new(config.db).await?);
 
     let server = Server::new(config.http, db);
     server.serve().await?;

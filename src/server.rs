@@ -10,7 +10,7 @@ use tokio::net::TcpListener;
 use std::path::PathBuf;
 use std::sync::Arc;
 
-use crate::db::{Db, Entry};
+use crate::db::{Db, Location};
 use crate::gpslogger;
 
 /// Configuration for the server
@@ -78,7 +78,16 @@ impl Server {
                 return Response::new(Body::from("Failed to parse body"));
             }
         };
-
+        let location = Location{
+            id: 0, // This is a placeholder
+            time: payload.timestamp,
+            latitude: payload.lat,
+            longitude: payload.lon,
+            accuracy: payload.acc,
+            altitude: payload.alt,
+        };
+        server.db.record(location).await.unwrap();
+        todo!("Ntfy / error handling");
         Response::new(Body::from("Request received"))
     }
 

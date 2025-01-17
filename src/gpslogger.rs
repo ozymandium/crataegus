@@ -76,7 +76,7 @@
 /// does no type conversion (e.g., for timestamps), and only stores data in the type in which it is
 /// received.
 use chrono::naive::serde::ts_seconds as deserialize_naive_date_time_from_sec;
-use chrono::{DateTime, FixedOffset, NaiveDateTime, Utc};
+use chrono::{DateTime, FixedOffset, NaiveDateTime, Utc, NaiveDate};
 use color_eyre::eyre::{eyre, Result};
 use serde::de::{self, Deserializer};
 use serde::Deserialize;
@@ -133,14 +133,22 @@ where
         .map_err(de::Error::custom)
 }
 
+fn deserialize_date_from_str<'de, D>(deserializer: D) -> Result<NaiveDate, D::Error>
+where
+    D: Deserializer<'de>,
+{
+    let s = String::deserialize(deserializer)?;
+    NaiveDate::parse_from_str(&s, "%Y-%m-%d").map_err(de::Error::custom)
+}
+
 #[derive(Deserialize, Debug)]
 pub struct Payload {
     /// Latitude in decimal degrees.
     /// Example: `41.74108695983887`.
-    lat: f64,
+    pub lat: f64,
     /// Longitude in decimal degrees.
     /// Example: `-91.84490871429443`.
-    lon: f64,
+    pub lon: f64,
     /// Number of satellites in use/visible (unclear).
     /// Example: `0`.
     sat: u8,
@@ -149,11 +157,11 @@ pub struct Payload {
     desc: String,
     /// Altitude in meters, using WGS84. Note that MSL must be set false in settings.
     /// Example: `1387.0`.
-    alt: f64,
+    pub alt: f64,
     /// Estimate of the accuracy of the location in meters. This is presumed to be the horizontal
     /// accuracy (earth-tangent plane).
     /// Example: `6.0`.
-    acc: f32,
+    pub acc: f32,
     /// Direction in degrees (unknown whether 0 is north or east, presumed north). This is also
     /// presumably direction of travel (angle of velocity vector), but may be the fused estimate of
     /// phone orientation.
@@ -171,7 +179,7 @@ pub struct Payload {
     /// Unix timestamp of the data, second-precision.
     /// Example: `1736999691`.
     #[serde(with = "deserialize_naive_date_time_from_sec")]
-    timestamp: NaiveDateTime,
+    pub timestamp: NaiveDateTime,
     /// Time as an ISO 8601 string with offset.
     /// Example: `2025-01-15T20:54:51.000-07:00`.
     #[serde(deserialize_with = "deserialize_date_time_fixed_offset_from_str")]
@@ -186,7 +194,8 @@ pub struct Payload {
     starttimestamp: NaiveDateTime,
     /// Date as an ISO 8601 string.
     /// Example: `2025-01-16`.
-    date: String,
+    #[serde(deserialize_with = "deserialize_date_from_str")]
+    date: NaiveDate,
     /// Battery percentage.
     /// Example: `27.0`.
     batt: f32,
@@ -279,7 +288,10 @@ mod tests {
                 .expect("")
                 .naive_utc()
         );
-        assert_eq!(payload.date, "2025-01-16");
+        assert_eq!(
+            payload.date,
+            NaiveDate::parse_from_str("2025-01-16", "%Y-%m-%d").expect("")
+        );
         assert_eq!(payload.batt, 27.0);
         assert_eq!(payload.ischarging, false);
         assert_eq!(payload.aid, "4ca9e1da592aca9b");
