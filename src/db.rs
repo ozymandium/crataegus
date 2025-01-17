@@ -1,9 +1,9 @@
 use chrono::{Local, NaiveDateTime};
 use color_eyre::eyre::{Result, WrapErr};
-use log::info;
+use log::{debug, info};
 use sea_orm::{
-    ActiveModelTrait, ActiveValue::NotSet, ConnectionTrait, Database, DatabaseConnection,
-    EntityTrait, IntoActiveModel, Schema, QueryFilter, ColumnTrait,
+    ActiveModelTrait, ActiveValue::NotSet, ColumnTrait, ConnectionTrait, Database,
+    DatabaseConnection, EntityTrait, IntoActiveModel, QueryFilter, Schema,
 };
 use serde::Deserialize;
 
@@ -33,10 +33,23 @@ impl Db {
         if !db_exists {
             info!("Database does not exist, creating it");
             let schema = Schema::new(db.get_database_backend());
-            let statement = schema.create_table_from_entity(location::Entity);
-            db.execute(db.get_database_backend().build(&statement))
-                .await
-                .wrap_err("Failed to create the entries table")?;
+            // add all the tables
+            //let statement = schema.create_table_from_entity(location::Entity);
+            //db.execute(db.get_database_backend().build(&statement))
+            //    .await
+            //    .wrap_err("Failed to create the entries table")?;
+            db.execute(
+                db.get_database_backend()
+                    .build(&schema.create_table_from_entity(user::Entity)),
+            )
+            .await
+            .wrap_err("Failed to create the users table")?;
+            db.execute(
+                db.get_database_backend()
+                    .build(&schema.create_table_from_entity(location::Entity)),
+            )
+            .await
+            .wrap_err("Failed to create the entries table")?;
         }
         Ok(Db { db })
     }
@@ -69,14 +82,17 @@ impl Db {
     }
 
     pub async fn check_user(&self, username: &String, password: &String) -> Result<bool> {
+        debug!("Checking user/pass: {}/{}", username, password);
         let user = user::Entity::find()
             .filter(user::Column::Username.eq(username))
             .one(&self.db)
             .await
-            .wrap_err(format!("Failed to find user in database: {}", username))?;
-        //Ok(user.map_or(false, |u| u.password == password))
-        // compare string to string reference
-        Ok(user.map_or(false, |u| u.password == *password))
+            .wrap_err("Failed to query user from database")?;
+        debug!("Found user/pass: {:?}", user);
+        match user {
+            Some(user) => Ok(user.password == *password),
+            None => Ok(false),
+        }
     }
 
     /// Backup the database

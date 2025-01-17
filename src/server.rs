@@ -78,13 +78,20 @@ impl Server {
         next: Next,
     ) -> Response<Body> {
         debug!("Authenticating user: {}", username);
-        let good = server.db.check_user(&username, &password.unwrap_or_default()).await.unwrap();
+        let good = server
+            .db
+            .check_user(&username, &password.unwrap_or_default())
+            .await
+            .unwrap();
         if !good {
             warn!("Failed to authenticate user: {}", username);
+            return Response::builder().status(401).body(Body::empty()).unwrap();
         }
         debug!("User authenticated: {}", username);
         // Add the authenticated user to the request extensions
-        request.extensions_mut().insert(AuthenticatedUser { username });
+        request
+            .extensions_mut()
+            .insert(AuthenticatedUser { username });
         next.run(request).await
     }
 
@@ -105,7 +112,6 @@ impl Server {
         request: Request<Body>,
     ) -> Response<Body> {
         debug!("Request received: {:?}", request);
-        todo!("Add user, from http basic auth");
         let body = Self::get_body_string(request).await;
         let payload = match gpslogger::Payload::from_http_body(&body) {
             Ok(payload) => payload,
