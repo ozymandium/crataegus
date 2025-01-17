@@ -96,6 +96,10 @@ impl Db {
     }
 }
 
+/////////////////////////////////////
+// Schemas for the database tables //
+/////////////////////////////////////
+
 mod location {
     use chrono::NaiveDateTime;
     use sea_orm::entity::prelude::*;

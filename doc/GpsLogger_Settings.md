@@ -10,7 +10,6 @@ GpsLogger Settings
 - Log to CSV: true
 - New file creation: Once a day
 - Log time with timezone offset: true
-- 
 #### Custom URL
 - Log to custom URL: true
 - Allow auto sending: true
