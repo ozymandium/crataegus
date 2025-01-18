@@ -1,8 +1,8 @@
-use color_eyre::eyre::{Result, WrapErr};
+use color_eyre::eyre::{eyre, Result, WrapErr};
 use log::info;
 use sea_orm::{
     ActiveModelTrait, ColumnTrait, ConnectionTrait, Database, DatabaseConnection, EntityTrait,
-    IntoActiveModel, QueryFilter, Schema,
+    IntoActiveModel, QueryFilter, Schema, SqlErr,
 };
 use serde::Deserialize;
 
@@ -51,15 +51,46 @@ impl Db {
         Ok(Db { conn })
     }
 
-    /// Record a new location in the database
+    /// Record a new location in the database. Silently ignore entries that are perfect duplicates,
+    /// which may occur as a result of manual uploads. Duplicated user/time info with different
+    /// location data will return an error.
+    /// # Arguments
+    /// * `loc` - The location to record
+    /// # Returns
+    /// `Ok(())` if the location was successfully recorded, or already exists in the database. An
+    /// error otherwise.
     pub async fn record(&self, loc: Location) -> Result<()> {
-        let active_loc = loc.into_active_model();
-        active_loc
-            .insert(&self.conn)
-            .await
-            .wrap_err("Failed to insert location into database")?;
+        // check for NaNs
+        if loc.latitude.is_nan()
+            || loc.longitude.is_nan()
+            || loc.altitude.is_nan()
+            || loc.accuracy.is_nan()
+        {
+            return Err(eyre!("Location contains NaNs"));
+        }
 
-        Ok(())
+        let active_loc = loc.clone().into_active_model();
+        match active_loc.insert(&self.conn).await {
+            Ok(_) => Ok(()),
+            Err(e) => {
+                if let Some(SqlErr::UniqueConstraintViolation(_)) = e.sql_err() {
+                    let orig = location::Entity::find()
+                        .filter(location::Column::Username.eq(loc.username.clone()))
+                        .filter(location::Column::Time.eq(loc.time.clone()))
+                        .one(&self.conn)
+                        .await
+                        .wrap_err("Failed to query original location when investigating duplicate")?
+                        .ok_or_else(|| eyre!("Got unique constraint violation but couldn't find the original:\n{:?}", loc))?;
+                    if loc == orig {
+                        Ok(())
+                    } else {
+                        Err(e).wrap_err(format!("Received user/time info that is duplicated, but location differs.\nOriginal: {:?}\nReceived: {:?}", orig, loc))
+                    }
+                } else {
+                    Err(e).wrap_err("Failed to insert location into database")
+                }
+            }
+        }
     }
 
     pub async fn user_add(&self, username: &String, password: &String) -> Result<()> {
@@ -75,7 +106,7 @@ impl Db {
         Ok(())
     }
 
-    pub async fn check_user(&self, username: &String, password: &String) -> Result<bool> {
+    pub async fn user_check(&self, username: &String, password: &String) -> Result<bool> {
         let user = user::Entity::find()
             .filter(user::Column::Username.eq(username))
             .one(&self.conn)
@@ -177,9 +208,9 @@ mod tests {
             accuracy: 0.0,
         };
         db.record(loc.clone()).await.unwrap();
+        assert_eq!(db.location_count().await, 1); // successfully added the first entry
+        db.record(loc.clone()).await.unwrap(); // adding again does nothing
         assert_eq!(db.location_count().await, 1);
-        let err = db.record(loc.clone()).await.unwrap_err();
-        assert_eq!(err.to_string(), "Failed to insert location into database");
         let loc2 = Location {
             username: "test".to_string(),
             time: chrono::Utc::now().naive_utc() + chrono::Duration::seconds(1),
@@ -189,6 +220,19 @@ mod tests {
             accuracy: 0.0,
         };
         db.record(loc2).await.unwrap();
-        assert_eq!(db.location_count().await, 2);
+        assert_eq!(db.location_count().await, 2); // successfully added the second entry
+        let loc3 = Location {
+            username: loc.username.clone(),
+            time: loc.time.clone(),
+            latitude: 1.0,
+            longitude: 1.0,
+            altitude: 1.0,
+            accuracy: 1.0,
+        };
+        let err = db.record(loc3).await.unwrap_err();
+        assert!(err
+            .to_string()
+            .contains("Received user/time info that is duplicated, but location differs."));
+        assert_eq!(db.location_count().await, 2); // failed to add the third entry
     }
 }

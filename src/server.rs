@@ -79,7 +79,7 @@ impl Server {
         debug!("Authenticating user: {}", username);
         let good = server
             .db
-            .check_user(&username, &password.unwrap_or_default())
+            .user_check(&username, &password.unwrap_or_default())
             .await
             .unwrap();
         if !good {
