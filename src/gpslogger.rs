@@ -75,17 +75,14 @@
 /// set the template to `%ALL` and allow user app updates to be handled in the server. This struct
 /// does no type conversion (e.g., for timestamps), and only stores data in the type in which it is
 /// received.
-use chrono::naive::serde::ts_seconds as deserialize_naive_date_time_from_sec;
-use chrono::{DateTime, FixedOffset, NaiveDate, NaiveDateTime, Utc};
+use chrono::{DateTime, FixedOffset, NaiveDate, Utc};
 use color_eyre::eyre::{eyre, Result};
 use serde::de::{self, Deserializer};
 use serde::Deserialize;
 
 /// Some fields are optional floats that may be empty. Give serde a way to deserialize those.
-///
 /// # Arguments
 /// * `deserializer` - The serde deserializer.
-///
 /// # Return
 /// An Option<f32> if the field is present, or None if it is not.
 fn deserialize_option_f32<'de, D>(deserializer: D) -> Result<Option<f32>, D::Error>
@@ -99,11 +96,24 @@ where
     }
 }
 
-/// Deserializer for `DateTime<FixedOffset>` from ISO 8601 strings.
-///
+/// Deserializer for `DateTime<Utc>` from ISO 8601 strings.
 /// # Arguments
 /// * `deserializer` - The serde deserializer.
-///
+/// # Return
+/// A DateTime<Utc> if the string is parseable, or an error if it is not.
+fn deserialize_date_time_utc_from_str<'de, D>(deserializer: D) -> Result<DateTime<Utc>, D::Error>
+where
+    D: Deserializer<'de>,
+{
+    let s = String::deserialize(deserializer)?;
+    Ok(DateTime::parse_from_rfc3339(&s)
+        .expect("Invalid RFC3339 string")
+        .to_utc())
+}
+
+/// Deserializer for `DateTime<FixedOffset>` from ISO 8601 strings.
+/// # Arguments
+/// * `deserializer` - The serde deserializer.
 /// # Return
 /// A DateTime<FixedOffset> if the string is parseable, or an error if it is not.
 fn deserialize_date_time_fixed_offset_from_str<'de, D>(
@@ -113,26 +123,31 @@ where
     D: Deserializer<'de>,
 {
     let s = String::deserialize(deserializer)?;
-    DateTime::parse_from_rfc3339(&s).map_err(de::Error::custom)
+    Ok(DateTime::parse_from_rfc3339(&s).expect("Invalid RFC3339 string"))
 }
 
 /// Deserializer for `DateTime<Utc>` from ISO 8601 strings.
-///
 /// # Arguments
 /// * `deserializer` - The serde deserializer.
-///
 /// # Return
 /// A DateTime<Utc> if the string is parseable, or an error if it is not.
 fn deserialize_date_time_utc_from_sec<'de, D>(deserializer: D) -> Result<DateTime<Utc>, D::Error>
 where
     D: Deserializer<'de>,
 {
-    let s = String::deserialize(deserializer)?;
-    DateTime::parse_from_rfc3339(&s)
-        .map(|dt| dt.with_timezone(&Utc))
-        .map_err(de::Error::custom)
+    let ts = String::deserialize(deserializer)?
+        .parse::<i64>()
+        .map_err(de::Error::custom)?;
+    Ok(DateTime::from_timestamp(ts, 0)
+        .expect("Invalid timestamp")
+        .to_utc())
 }
 
+/// Deserializer for `NaiveDate` from ISO 8601 strings.
+/// # Arguments
+/// * `deserializer` - The serde deserializer.
+/// # Return
+/// A NaiveDate if the string is parseable, or an error if it is not.
 fn deserialize_date_from_str<'de, D>(deserializer: D) -> Result<NaiveDate, D::Error>
 where
     D: Deserializer<'de>,
@@ -184,23 +199,22 @@ pub struct Payload {
     spd: f32,
     /// Unix timestamp of the data, second-precision.
     /// Example: `1736999691`.
-    #[serde(with = "deserialize_naive_date_time_from_sec")]
-    pub timestamp: NaiveDateTime,
+    #[serde(deserialize_with = "deserialize_date_time_utc_from_sec")]
+    #[allow(dead_code)]
+    timestamp: DateTime<Utc>,
     /// Time as an ISO 8601 string with offset.
     /// Example: `2025-01-15T20:54:51.000-07:00`.
     #[serde(deserialize_with = "deserialize_date_time_fixed_offset_from_str")]
-    #[allow(dead_code)]
-    timeoffset: DateTime<FixedOffset>,
+    pub timeoffset: DateTime<FixedOffset>,
     /// Time as an ISO 8601 string in UTC. It should be the same as `timestamp`.
     /// Example: `2025-01-16T03:54:51.000Z`.
-    #[serde(deserialize_with = "deserialize_date_time_utc_from_sec")]
-    #[allow(dead_code)]
-    time: DateTime<Utc>,
+    #[serde(deserialize_with = "deserialize_date_time_utc_from_str")]
+    pub time: DateTime<Utc>,
     /// Unix timestamp of the start of the data collection event, second-precision.
     /// Example: `1737000139`.
-    #[serde(with = "deserialize_naive_date_time_from_sec")]
+    #[serde(deserialize_with = "deserialize_date_time_utc_from_sec")]
     #[allow(dead_code)]
-    starttimestamp: NaiveDateTime,
+    starttimestamp: DateTime<Utc>,
     /// Date as an ISO 8601 string.
     /// Example: `2025-01-16`.
     #[serde(deserialize_with = "deserialize_date_from_str")]
@@ -289,32 +303,11 @@ mod tests {
         assert_eq!(payload.prov, "gps");
         assert_eq!(payload.spd_kph, 0.0);
         assert_eq!(payload.spd, 0.0);
-        assert_eq!(
-            payload.timestamp,
-            DateTime::<Utc>::from_timestamp(1736999691, 0)
-                .expect("")
-                .naive_utc()
-        );
-        assert_eq!(
-            payload.timeoffset,
-            DateTime::<FixedOffset>::parse_from_rfc3339("2025-01-15T20:54:51.000-07:00").expect("")
-        );
-        assert_eq!(
-            payload.time,
-            DateTime::<FixedOffset>::parse_from_rfc3339("2025-01-16T03:54:51.000Z")
-                .expect("")
-                .to_utc()
-        );
-        assert_eq!(
-            payload.starttimestamp,
-            DateTime::<Utc>::from_timestamp(1737000139, 0)
-                .expect("")
-                .naive_utc()
-        );
-        assert_eq!(
-            payload.date,
-            NaiveDate::parse_from_str("2025-01-16", "%Y-%m-%d").expect("")
-        );
+        assert_eq!(payload.timestamp.timestamp(), 1736999691);
+        assert_eq!(payload.timeoffset.to_rfc3339(), "2025-01-15T20:54:51-07:00");
+        assert_eq!(payload.time.to_rfc3339(), "2025-01-16T03:54:51+00:00");
+        assert_eq!(payload.starttimestamp.timestamp(), 1737000139);
+        assert_eq!(payload.date.to_string(), "2025-01-16");
         assert_eq!(payload.batt, 27.0);
         assert_eq!(payload.ischarging, false);
         assert_eq!(payload.aid, "4ca9e1da592aca9b");
@@ -325,5 +318,9 @@ mod tests {
         assert_eq!(payload.vdop, None);
         assert_eq!(payload.pdop, None);
         assert_eq!(payload.dist, 0.0);
+
+        // several repeated timestamps should all be the same
+        assert_eq!(payload.timestamp, payload.time);
+        assert_eq!(payload.timeoffset, payload.time);
     }
 }

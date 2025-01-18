@@ -1,5 +1,5 @@
 use color_eyre::eyre::{eyre, Result, WrapErr};
-use log::info;
+use log::{debug, info};
 use sea_orm::{
     ActiveModelTrait, ColumnTrait, ConnectionTrait, Database, DatabaseConnection, EntityTrait,
     IntoActiveModel, QueryFilter, Schema, SqlErr,
@@ -76,15 +76,16 @@ impl Db {
                 if let Some(SqlErr::UniqueConstraintViolation(_)) = e.sql_err() {
                     let orig = location::Entity::find()
                         .filter(location::Column::Username.eq(loc.username.clone()))
-                        .filter(location::Column::Time.eq(loc.time.clone()))
+                        .filter(location::Column::TimeUtc.eq(loc.time_utc))
                         .one(&self.conn)
                         .await
                         .wrap_err("Failed to query original location when investigating duplicate")?
                         .ok_or_else(|| eyre!("Got unique constraint violation but couldn't find the original:\n{:?}", loc))?;
                     if loc == orig {
+                        debug!("Ignoring duplicate location entry: {:?}", loc);
                         Ok(())
                     } else {
-                        Err(e).wrap_err(format!("Received user/time info that is duplicated, but location differs.\nOriginal: {:?}\nReceived: {:?}", orig, loc))
+                        Err(e).wrap_err(format!("Received user/time info that is duplicated, but other fields differ.\nOriginal: {:?}\nReceived: {:?}", orig, loc))
                     }
                 } else {
                     Err(e).wrap_err("Failed to insert location into database")
@@ -138,7 +139,7 @@ impl Db {
 /////////////////////////////////////
 
 mod location {
-    use chrono::NaiveDateTime;
+    use chrono::{DateTime, FixedOffset, Utc};
     use sea_orm::entity::prelude::*;
 
     #[derive(Clone, Debug, PartialEq, DeriveEntityModel)]
@@ -147,7 +148,8 @@ mod location {
         #[sea_orm(primary_key, auto_increment = false)]
         pub username: String,
         #[sea_orm(primary_key, auto_increment = false)]
-        pub time: NaiveDateTime,
+        pub time_utc: DateTime<Utc>,
+        pub time_local: DateTime<FixedOffset>,
         pub latitude: f64,
         pub longitude: f64,
         pub altitude: f64,
@@ -184,6 +186,7 @@ mod user {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use chrono::{DateTime, Utc};
     use tempfile::NamedTempFile;
 
     /// Creates an ephemeral database for testing and tries to add identical entries to the
@@ -199,9 +202,15 @@ mod tests {
         .await
         .unwrap();
         assert_eq!(db.location_count().await, 0);
+        let username = "test".to_string();
+        let time_utc = DateTime::parse_from_rfc3339("2025-01-16T03:54:51.000Z")
+            .unwrap()
+            .with_timezone(&Utc);
+        let time_local = time_utc.with_timezone(&chrono::FixedOffset::west_opt(3600).unwrap());
         let loc = Location {
-            username: "test".to_string(),
-            time: chrono::Utc::now().naive_utc(),
+            username: username.clone(),
+            time_utc: time_utc.clone(),
+            time_local: time_local.clone(),
             latitude: 0.0,
             longitude: 0.0,
             altitude: 0.0,
@@ -211,28 +220,23 @@ mod tests {
         assert_eq!(db.location_count().await, 1); // successfully added the first entry
         db.record(loc.clone()).await.unwrap(); // adding again does nothing
         assert_eq!(db.location_count().await, 1);
-        let loc2 = Location {
-            username: "test".to_string(),
-            time: chrono::Utc::now().naive_utc() + chrono::Duration::seconds(1),
-            latitude: 0.0,
-            longitude: 0.0,
-            altitude: 0.0,
-            accuracy: 0.0,
-        };
+        let mut loc2 = loc.clone();
+        loc2.time_utc += chrono::Duration::seconds(1); // modify the time to make it unique
         db.record(loc2).await.unwrap();
         assert_eq!(db.location_count().await, 2); // successfully added the second entry
         let loc3 = Location {
-            username: loc.username.clone(),
-            time: loc.time.clone(),
+            username: username.clone(),
+            time_utc: time_utc.clone(),
+            time_local: time_local.clone(),
             latitude: 1.0,
             longitude: 1.0,
             altitude: 1.0,
             accuracy: 1.0,
         };
-        let err = db.record(loc3).await.unwrap_err();
+        let err = db.record(loc3).await.unwrap_err(); // same user/time with different location
         assert!(err
             .to_string()
-            .contains("Received user/time info that is duplicated, but location differs."));
+            .contains("Received user/time info that is duplicated, but other fields differ."));
         assert_eq!(db.location_count().await, 2); // failed to add the third entry
     }
 }

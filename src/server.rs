@@ -120,7 +120,8 @@ impl Server {
         };
         let location = Location {
             username: username,
-            time: payload.timestamp,
+            time_utc: payload.time,
+            time_local: payload.timeoffset,
             latitude: payload.lat,
             longitude: payload.lon,
             accuracy: payload.acc,

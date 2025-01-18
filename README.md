@@ -1,7 +1,7 @@
 Crataegus
 ===
 ## To Do
-- graceful decline to record duplicate entries
+- add local time to the record
 - should db decline to record if user doesn't exist?
     - in practice this can't happen because it's protected in the server layer
     - perhaps the check should be lower level, at the db layer
@@ -19,6 +19,12 @@ Crataegus
 - figure out if there's a more built-in way to parse the body, possibly using axum_serde crate and/or having the data as url parameters
 - status code returns in the server
 - input sanitization
+    - sanity checks on data
 - set log level on sqlx queries to debug
 - check for duplicates before adding
 - figure out how to access profile settings saved from GpsLogger
+
+Schema changes:
+- add source
+- add local time
+- make accuracy optional
