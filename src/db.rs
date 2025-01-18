@@ -8,7 +8,7 @@ use serde::Deserialize;
 
 use std::path::PathBuf;
 
-use crate::schema::{location, user, Location, ModelValidation};
+use crate::schema::{location, user, Location, SanityCheck};
 
 /// Configuration for the database, obtained from main.rs::Args
 #[derive(Deserialize, Debug, Clone)]
@@ -72,7 +72,7 @@ impl Db {
     /// `Ok(())` if the location was successfully recorded, or already exists in the database. An
     /// error otherwise.
     pub async fn record(&self, loc: Location) -> Result<()> {
-        loc.validate()?;
+        loc.sanity_check()?;
         let active_loc = loc.clone().into_active_model();
         match active_loc.insert(&self.conn).await {
             Ok(_) => Ok(()),
