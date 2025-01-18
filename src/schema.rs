@@ -52,7 +52,7 @@ pub mod user {
 impl Validate for Location {
     fn validate(&self) -> Result<()> {
         use color_eyre::eyre::ensure;
-        todo!("value user list?");
+        /// TODO: validate user exists somehow here?
         // float nan/inf checks
         ensure!(
             self.latitude.is_finite(),
@@ -91,3 +91,5 @@ impl Validate for Location {
         Ok(())
     }
 }
+
+/// TODO: Add user validation
