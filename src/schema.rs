@@ -1,5 +1,12 @@
+use color_eyre::eyre::Result;
+
 pub use location::Model as Location;
 pub use user::Model as User;
+
+/// Trait applied to all models to allow one-line validation.
+pub trait Validate {
+    fn validate(&self) -> Result<()>;
+}
 
 pub mod location {
     use chrono::{DateTime, FixedOffset, Utc};
@@ -40,4 +47,47 @@ pub mod user {
     pub enum Relation {}
 
     impl ActiveModelBehavior for ActiveModel {}
+}
+
+impl Validate for Location {
+    fn validate(&self) -> Result<()> {
+        use color_eyre::eyre::ensure;
+        todo!("value user list?");
+        // float nan/inf checks
+        ensure!(
+            self.latitude.is_finite(),
+            format!("Latitude is not finite: {}", self.latitude)
+        );
+        ensure!(
+            self.longitude.is_finite(),
+            format!("Longitude is not finite: {}", self.longitude)
+        );
+        ensure!(
+            self.altitude.is_finite(),
+            format!("Altitude is not finite: {}", self.altitude)
+        );
+        ensure!(
+            self.accuracy.is_none() || self.accuracy.unwrap().is_finite(),
+            format!("Accuracy is not finite: {:?}", self.accuracy)
+        );
+        // Position value checks
+        ensure!(
+            -90.0 <= self.latitude && self.latitude <= 90.0,
+            format!("Latitude out of bounds: {}", self.latitude)
+        );
+        ensure!(
+            -180.0 <= self.longitude && self.longitude <= 180.0,
+            format!("Longitude out of bounds: {}", self.longitude)
+        );
+        ensure!(
+            -1000.0 <= self.altitude && self.altitude <= 10000.0,
+            format!("Altitude out of bounds: {}", self.altitude)
+        );
+        ensure!(
+            self.accuracy.is_none()
+                || (0.0 <= self.accuracy.unwrap() && self.accuracy.unwrap() <= 100.0),
+            format!("Accuracy out of bounds: {:?}", self.accuracy)
+        );
+        Ok(())
+    }
 }

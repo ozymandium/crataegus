@@ -8,7 +8,7 @@ use serde::Deserialize;
 
 use std::path::PathBuf;
 
-use crate::schema::{location, user, Location};
+use crate::schema::{location, user, Location, Validate};
 
 /// Configuration for the database, obtained from main.rs::Args
 #[derive(Deserialize, Debug, Clone)]
@@ -72,15 +72,7 @@ impl Db {
     /// `Ok(())` if the location was successfully recorded, or already exists in the database. An
     /// error otherwise.
     pub async fn record(&self, loc: Location) -> Result<()> {
-        // check for NaNs
-        if loc.latitude.is_nan()
-            || loc.longitude.is_nan()
-            || loc.altitude.is_nan()
-            || loc.accuracy.map_or(false, |x| x.is_nan())
-        {
-            return Err(eyre!("Location contains NaNs"));
-        }
-
+        loc.validate()?;
         let active_loc = loc.clone().into_active_model();
         match active_loc.insert(&self.conn).await {
             Ok(_) => Ok(()),
