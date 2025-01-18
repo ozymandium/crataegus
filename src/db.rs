@@ -1,8 +1,8 @@
 use color_eyre::eyre::{eyre, Result, WrapErr};
-use log::{debug, info};
+use log::{debug, info, LevelFilter};
 use sea_orm::{
-    ActiveModelTrait, ColumnTrait, ConnectionTrait, Database, DatabaseConnection, EntityTrait,
-    IntoActiveModel, QueryFilter, Schema, SqlErr,
+    ActiveModelTrait, ColumnTrait, ConnectOptions, ConnectionTrait, Database, DatabaseConnection,
+    EntityTrait, IntoActiveModel, QueryFilter, Schema, SqlErr,
 };
 use serde::Deserialize;
 
@@ -23,8 +23,10 @@ pub struct Db {
 impl Db {
     pub async fn new(config: Config) -> Result<Self> {
         // connecting with `c` option will create the file if it doesn't exist
-        let db_url = format!("sqlite://{}?mode=rwc", config.path.display());
-        let conn = Database::connect(&db_url)
+        let url = format!("sqlite://{}?mode=rwc", config.path.display());
+        let mut options = ConnectOptions::new(url);
+        options.sqlx_logging_level(LevelFilter::Debug); // sqlx logging is always debug
+        let conn = Database::connect(options)
             .await
             .wrap_err("Failed to connect to the database")?;
         info!("Database does not exist, creating it");
