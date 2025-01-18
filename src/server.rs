@@ -128,7 +128,7 @@ impl Server {
             altitude: payload.alt,
             accuracy: Some(payload.acc),
         };
-        server.db.record(location).await.unwrap();
+        server.db.location_insert(location).await.unwrap();
         Response::new(Body::from("Request received"))
     }
 

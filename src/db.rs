@@ -63,42 +63,18 @@ impl Db {
         Ok(Db { conn })
     }
 
-    /// Record a new location in the database. Silently ignore entries that are perfect duplicates,
-    /// which may occur as a result of manual uploads. Duplicated user/time info with different
-    /// location data will return an error.
-    /// # Arguments
-    /// * `loc` - The location to record
-    /// # Returns
-    /// `Ok(())` if the location was successfully recorded, or already exists in the database. An
-    /// error otherwise.
-    pub async fn record(&self, loc: Location) -> Result<()> {
-        loc.sanity_check()?;
-        let active_loc = loc.clone().into_active_model();
-        match active_loc.insert(&self.conn).await {
-            Ok(_) => Ok(()),
-            Err(e) => {
-                if let Some(SqlErr::UniqueConstraintViolation(_)) = e.sql_err() {
-                    let orig = location::Entity::find()
-                        .filter(location::Column::Username.eq(loc.username.clone()))
-                        .filter(location::Column::TimeUtc.eq(loc.time_utc))
-                        .one(&self.conn)
-                        .await
-                        .wrap_err("Failed to query original location when investigating duplicate")?
-                        .ok_or_else(|| eyre!("Got unique constraint violation but couldn't find the original:\n{:?}", loc))?;
-                    if loc == orig {
-                        debug!("Ignoring duplicate location entry: {:?}", loc);
-                        Ok(())
-                    } else {
-                        Err(e).wrap_err(format!("Received user/time info that is duplicated, but other fields differ.\nOriginal: {:?}\nReceived: {:?}", orig, loc))
-                    }
-                } else {
-                    Err(e).wrap_err("Failed to insert location into database")
-                }
-            }
-        }
-    }
+    ////////////////////////////
+    // User-Related Functions //
+    ////////////////////////////
 
-    pub async fn user_add(&self, username: &String, password: &String) -> Result<()> {
+    /// Insert a new user into the database. If the user already exists, this function will return
+    /// an error.
+    /// # Arguments
+    /// * `username` - The username to insert
+    /// * `password` - The password to insert
+    /// # Returns
+    /// `Ok(())` if the user was successfully inserted, an error otherwise
+    pub async fn user_insert(&self, username: &String, password: &String) -> Result<()> {
         let user = user::Model {
             username: username.clone(),
             password: password.clone(),
@@ -127,6 +103,45 @@ impl Db {
         match user {
             Some(user) => Ok(user.password == *password),
             None => Ok(false),
+        }
+    }
+
+    ////////////////////////////////
+    // Location-Related Functions //
+    ////////////////////////////////
+
+    /// Record a new location in the database. Silently ignore entries that are perfect duplicates,
+    /// which may occur as a result of manual uploads. Duplicated user/time info with different
+    /// location data will return an error.
+    /// # Arguments
+    /// * `loc` - The location to record
+    /// # Returns
+    /// `Ok(())` if the location was successfully recorded, or already exists in the database. An
+    /// error otherwise.
+    pub async fn location_insert(&self, loc: Location) -> Result<()> {
+        loc.sanity_check()?;
+        let active_loc = loc.clone().into_active_model();
+        match active_loc.insert(&self.conn).await {
+            Ok(_) => Ok(()),
+            Err(e) => {
+                if let Some(SqlErr::UniqueConstraintViolation(_)) = e.sql_err() {
+                    let orig = location::Entity::find()
+                        .filter(location::Column::Username.eq(loc.username.clone()))
+                        .filter(location::Column::TimeUtc.eq(loc.time_utc))
+                        .one(&self.conn)
+                        .await
+                        .wrap_err("Failed to query original location when investigating duplicate")?
+                        .ok_or_else(|| eyre!("Got unique constraint violation but couldn't find the original:\n{:?}", loc))?;
+                    if loc == orig {
+                        debug!("Ignoring duplicate location entry: {:?}", loc);
+                        Ok(())
+                    } else {
+                        Err(e).wrap_err(format!("Received user/time info that is duplicated, but other fields differ.\nOriginal: {:?}\nReceived: {:?}", orig, loc))
+                    }
+                } else {
+                    Err(e).wrap_err("Failed to insert location into database")
+                }
+            }
         }
     }
 
@@ -182,13 +197,13 @@ mod tests {
             altitude: 0.0,
             accuracy: Some(0.0),
         };
-        db.record(loc.clone()).await.unwrap();
+        db.location_insert(loc.clone()).await.unwrap();
         assert_eq!(db.location_count().await, 1); // successfully added the first entry
-        db.record(loc.clone()).await.unwrap(); // adding again does nothing
+        db.location_insert(loc.clone()).await.unwrap(); // adding again does nothing
         assert_eq!(db.location_count().await, 1);
         let mut loc2 = loc.clone();
         loc2.time_utc += chrono::Duration::seconds(1); // modify the time to make it unique
-        db.record(loc2).await.unwrap();
+        db.location_insert(loc2).await.unwrap();
         assert_eq!(db.location_count().await, 2); // successfully added the second entry
         let loc3 = Location {
             username: username.clone(),
@@ -199,7 +214,7 @@ mod tests {
             altitude: 1.0,
             accuracy: Some(1.0),
         };
-        let err = db.record(loc3).await.unwrap_err(); // same user/time with different location
+        let err = db.location_insert(loc3).await.unwrap_err(); // same user/time with different location
         assert!(err
             .to_string()
             .contains("Received user/time info that is duplicated, but other fields differ."));
@@ -221,7 +236,7 @@ mod tests {
                 .unwrap(),
             false
         );
-        db.user_add(&"user".to_string(), &"pass".to_string())
+        db.user_insert(&"user".to_string(), &"pass".to_string())
             .await
             .unwrap();
         assert_eq!(
