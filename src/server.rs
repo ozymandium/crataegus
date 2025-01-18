@@ -17,8 +17,9 @@ use tokio::net::TcpListener;
 
 use std::sync::Arc;
 
-use crate::db::{Db, Location};
+use crate::db::Db;
 use crate::gpslogger;
+use crate::schema::Location;
 
 /// Configuration for the server
 #[derive(Debug, Deserialize)]

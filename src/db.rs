@@ -8,19 +8,29 @@ use serde::Deserialize;
 
 use std::path::PathBuf;
 
-/// Use the `location::Model` as `Location` for simplicity.
-pub use location::Model as Location;
+use crate::schema::{location, user, Location};
 
+/// Configuration for the database, obtained from main.rs::Args
 #[derive(Deserialize, Debug, Clone)]
 pub struct Config {
+    /// Path to the SQLite database file
     path: PathBuf,
 }
 
+/// The database struct used by the server and the app. SQLite is used as the database backend, and
+/// all storage happens through this struct.
 pub struct Db {
+    /// The database connection
     conn: DatabaseConnection,
 }
 
 impl Db {
+    /// Create a new database connection. If the database does not exist, it will be created and
+    /// the necessary tables will be added.
+    /// # Arguments
+    /// * `config` - The configuration for the database
+    /// # Returns
+    /// The database struct
     pub async fn new(config: Config) -> Result<Self> {
         // connecting with `c` option will create the file if it doesn't exist
         let url = format!("sqlite://{}?mode=rwc", config.path.display());
@@ -141,51 +151,6 @@ impl Db {
             .unwrap()
             .len()
     }
-}
-
-/////////////////////////////////////
-// Schemas for the database tables //
-/////////////////////////////////////
-
-mod location {
-    use chrono::{DateTime, FixedOffset, Utc};
-    use sea_orm::entity::prelude::*;
-
-    #[derive(Clone, Debug, PartialEq, DeriveEntityModel)]
-    #[sea_orm(table_name = "locations")]
-    pub struct Model {
-        #[sea_orm(primary_key, auto_increment = false)]
-        pub username: String,
-        #[sea_orm(primary_key, auto_increment = false)]
-        pub time_utc: DateTime<Utc>,
-        pub time_local: DateTime<FixedOffset>,
-        pub latitude: f64,
-        pub longitude: f64,
-        pub altitude: f64,
-        pub accuracy: Option<f32>,
-    }
-
-    #[derive(Copy, Clone, Debug, EnumIter, DeriveRelation)]
-    pub enum Relation {}
-
-    impl ActiveModelBehavior for ActiveModel {}
-}
-
-mod user {
-    use sea_orm::entity::prelude::*;
-
-    #[derive(Clone, Debug, PartialEq, DeriveEntityModel)]
-    #[sea_orm(table_name = "users")]
-    pub struct Model {
-        #[sea_orm(primary_key, auto_increment = false)]
-        pub username: String,
-        pub password: String,
-    }
-
-    #[derive(Copy, Clone, Debug, EnumIter, DeriveRelation)]
-    pub enum Relation {}
-
-    impl ActiveModelBehavior for ActiveModel {}
 }
 
 ////////////////
