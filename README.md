@@ -10,7 +10,6 @@ Crataegus
     - GPSLOGGER
     - PHOTO
 - photo import
-    - will need to make accuracy optional
     - harvest gps data from exif, set time from gps time and do a timezone lookup instead of using other image parameters for local time.
 - get rid of unwrap / graceful error handling
 - figure out sqlite backup
@@ -24,5 +23,3 @@ Crataegus
 
 Schema changes:
 - add source
-- add local time
-- make accuracy optional

@@ -8,7 +8,7 @@ use serde::Deserialize;
 
 use std::path::PathBuf;
 
-use crate::schema::{location, user, Location, Validate};
+use crate::schema::{location, user, Location, ModelValidation};
 
 /// Configuration for the database, obtained from main.rs::Args
 #[derive(Deserialize, Debug, Clone)]

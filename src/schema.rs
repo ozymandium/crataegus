@@ -4,7 +4,7 @@ pub use location::Model as Location;
 pub use user::Model as User;
 
 /// Trait applied to all models to allow one-line validation.
-pub trait Validate {
+pub trait ModelValidation {
     fn validate(&self) -> Result<()>;
 }
 
@@ -49,10 +49,10 @@ pub mod user {
     impl ActiveModelBehavior for ActiveModel {}
 }
 
-impl Validate for Location {
+impl ModelValidation for Location {
     fn validate(&self) -> Result<()> {
         use color_eyre::eyre::ensure;
-        /// TODO: validate user exists somehow here?
+        // TODO: validate user exists somehow here?
         // float nan/inf checks
         ensure!(
             self.latitude.is_finite(),
@@ -92,4 +92,4 @@ impl Validate for Location {
     }
 }
 
-/// TODO: Add user validation
+// TODO: Add user validation
