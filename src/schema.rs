@@ -51,8 +51,8 @@ pub mod location {
 
 impl SanityCheck for Location {
     fn sanity_check(&self) -> Result<()> {
+        use chrono::Utc;
         use color_eyre::eyre::ensure;
-        // TODO: validate user exists somehow here?
         // float nan/inf checks
         ensure!(
             self.latitude.is_finite(),
@@ -88,8 +88,14 @@ impl SanityCheck for Location {
                 || (0.0 <= self.accuracy.unwrap() && self.accuracy.unwrap() <= 100.0),
             format!("Accuracy out of bounds: {:?}", self.accuracy)
         );
+        // utc and local time should be the same
+        ensure!(
+            self.time_utc == self.time_local.with_timezone(&Utc),
+            format!(
+                "Time UTC and Time Local are not the same: {:?} != {:?}",
+                self.time_utc, self.time_local
+            )
+        );
         Ok(())
     }
 }
-
-// TODO: Add user validation

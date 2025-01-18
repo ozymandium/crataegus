@@ -203,7 +203,9 @@ mod tests {
         assert_eq!(db.location_count().await, 1);
         let mut loc2 = loc.clone();
         loc2.time_utc += chrono::Duration::seconds(1); // modify the time to make it unique
-        db.location_insert(loc2).await.unwrap();
+        assert!(db.location_insert(loc2.clone()).await.is_err()); // but the 2 times don't match
+        loc2.time_local += chrono::Duration::seconds(1); // now the times are unique and match
+        db.location_insert(loc2.clone()).await.unwrap();
         assert_eq!(db.location_count().await, 2); // successfully added the second entry
         let loc3 = Location {
             username: username.clone(),
