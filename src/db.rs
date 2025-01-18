@@ -107,6 +107,13 @@ impl Db {
         Ok(())
     }
 
+    /// Check if the user exists in the database and if the password matches. Returns false if
+    /// either the user does not exist or the user does exist, but the password does not match.
+    /// # Arguments
+    /// * `username` - The username to check
+    /// * `password` - The password to check
+    /// # Returns
+    /// `Ok(true)` if the user exists and the password matches, `Ok(false)` if the user does not
     pub async fn user_check(&self, username: &String, password: &String) -> Result<bool> {
         let user = user::Entity::find()
             .filter(user::Column::Username.eq(username))
@@ -238,5 +245,37 @@ mod tests {
             .to_string()
             .contains("Received user/time info that is duplicated, but other fields differ."));
         assert_eq!(db.location_count().await, 2); // failed to add the third entry
+    }
+
+    /// Creates an ephemeral database and checks user table operations.
+    #[tokio::test]
+    async fn test_user_table() {
+        let db_file = NamedTempFile::new().unwrap();
+        let db = Db::new(Config {
+            path: db_file.path().to_path_buf(),
+        })
+        .await
+        .unwrap();
+        assert_eq!(
+            db.user_check(&"user".to_string(), &"pass".to_string())
+                .await
+                .unwrap(),
+            false
+        );
+        db.user_add(&"user".to_string(), &"pass".to_string())
+            .await
+            .unwrap();
+        assert_eq!(
+            db.user_check(&"user".to_string(), &"pass".to_string())
+                .await
+                .unwrap(),
+            true
+        );
+        assert_eq!(
+            db.user_check(&"user".to_string(), &"wrong".to_string())
+                .await
+                .unwrap(),
+            false
+        );
     }
 }
