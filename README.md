@@ -1,7 +1,6 @@
 Crataegus
 ===
 ## To Do
-- add local time to the record
 - should db decline to record if user doesn't exist?
     - in practice this can't happen because it's protected in the server layer
     - perhaps the check should be lower level, at the db layer
@@ -12,6 +11,7 @@ Crataegus
     - PHOTO
 - photo import
     - will need to make accuracy optional
+    - harvest gps data from exif, set time from gps time and do a timezone lookup instead of using other image parameters for local time.
 - get rid of unwrap / graceful error handling
 - figure out sqlite backup
     - rusqlite has backup integration as a feature
@@ -20,8 +20,6 @@ Crataegus
 - status code returns in the server
 - input sanitization
     - sanity checks on data
-- set log level on sqlx queries to debug
-- check for duplicates before adding
 - figure out how to access profile settings saved from GpsLogger
 
 Schema changes:

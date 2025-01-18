@@ -66,7 +66,7 @@ impl Db {
         if loc.latitude.is_nan()
             || loc.longitude.is_nan()
             || loc.altitude.is_nan()
-            || loc.accuracy.is_nan()
+            || loc.accuracy.map_or(false, |x| x.is_nan())
         {
             return Err(eyre!("Location contains NaNs"));
         }
@@ -162,7 +162,7 @@ mod location {
         pub latitude: f64,
         pub longitude: f64,
         pub altitude: f64,
-        pub accuracy: f32,
+        pub accuracy: Option<f32>,
     }
 
     #[derive(Copy, Clone, Debug, EnumIter, DeriveRelation)]
@@ -223,7 +223,7 @@ mod tests {
             latitude: 0.0,
             longitude: 0.0,
             altitude: 0.0,
-            accuracy: 0.0,
+            accuracy: Some(0.0),
         };
         db.record(loc.clone()).await.unwrap();
         assert_eq!(db.location_count().await, 1); // successfully added the first entry
@@ -240,7 +240,7 @@ mod tests {
             latitude: 1.0,
             longitude: 1.0,
             altitude: 1.0,
-            accuracy: 1.0,
+            accuracy: Some(1.0),
         };
         let err = db.record(loc3).await.unwrap_err(); // same user/time with different location
         assert!(err

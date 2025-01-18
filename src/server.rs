@@ -124,8 +124,8 @@ impl Server {
             time_local: payload.timeoffset,
             latitude: payload.lat,
             longitude: payload.lon,
-            accuracy: payload.acc,
             altitude: payload.alt,
+            accuracy: Some(payload.acc),
         };
         server.db.record(location).await.unwrap();
         Response::new(Body::from("Request received"))
