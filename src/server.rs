@@ -19,7 +19,6 @@ use std::sync::Arc;
 
 use crate::db::Db;
 use crate::gpslogger;
-use crate::schema::{Location, Source};
 
 /// Configuration for the server
 #[derive(Debug, Deserialize)]
@@ -119,17 +118,11 @@ impl Server {
                 return Response::new(Body::from("Failed to parse body"));
             }
         };
-        let location = Location {
-            username: username,
-            time_utc: payload.time,
-            time_local: payload.timeoffset,
-            latitude: payload.lat,
-            longitude: payload.lon,
-            altitude: payload.alt,
-            accuracy: Some(payload.acc),
-            source: Source::GpsLogger,
-        };
-        server.db.location_insert(location).await.unwrap();
+        server
+            .db
+            .location_insert(payload.to_location(&username))
+            .await
+            .unwrap();
         Response::new(Body::from("Request received"))
     }
 

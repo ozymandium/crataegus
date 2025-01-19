@@ -1,3 +1,4 @@
+use crate::schema::{Location, Source};
 /// The body of the HTTP message is specified by a template that is configured in the GpsLogger app.
 /// Its value should be set to `%ALL`. This will result in a body string that looks like this:
 /// ```txt
@@ -278,6 +279,24 @@ impl Payload {
         serde_urlencoded::from_str(body_str)
             .map_err(|e| eyre!("Failed to parse body string: {}", e))
     }
+
+    /// Convert the Payload struct to a Location struct.
+    /// # Arguments
+    /// * `username` - The username to associate with the location.
+    /// # Return
+    /// A Location struct with the data from the Payload struct.
+    pub fn to_location(&self, username: &String) -> Location {
+        Location {
+            username: username.clone(),
+            time_utc: self.time,
+            time_local: self.timeoffset,
+            latitude: self.lat,
+            longitude: self.lon,
+            altitude: self.alt,
+            accuracy: Some(self.acc),
+            source: Source::GpsLogger,
+        }
+    }
 }
 
 ////////////////
@@ -288,11 +307,13 @@ impl Payload {
 mod tests {
     use super::*;
 
+    /// Define a common HTTP body string for testing.
+    const BODY_STR: &str = "lat=41.74108695983887&lon=-91.84490871429443&sat=0&desc=&alt=1387.0&acc=6.0&dir=170.8125&prov=gps&spd_kph=0.0&spd=0.0&timestamp=1736999691&timeoffset=2025-01-15T20:54:51.000-07:00&time=2025-01-16T03:54:51.000Z&starttimestamp=1737000139&date=2025-01-16&batt=27.0&ischarging=false&aid=4ca9e1da592aca9b&ser=4ca9e1da592aca9b&act=&filename=20250115&profile=Default+Profile&hdop=&vdop=&pdop=&dist=0";
+
     /// An actual body string observed from the GpsLogger app.
     #[test]
     fn test_from_http_body() {
-        let body_str = "lat=41.74108695983887&lon=-91.84490871429443&sat=0&desc=&alt=1387.0&acc=6.0&dir=170.8125&prov=gps&spd_kph=0.0&spd=0.0&timestamp=1736999691&timeoffset=2025-01-15T20:54:51.000-07:00&time=2025-01-16T03:54:51.000Z&starttimestamp=1737000139&date=2025-01-16&batt=27.0&ischarging=false&aid=4ca9e1da592aca9b&ser=4ca9e1da592aca9b&act=&filename=20250115&profile=Default+Profile&hdop=&vdop=&pdop=&dist=0".to_string();
-        let payload = Payload::from_http_body(&body_str).unwrap();
+        let payload = Payload::from_http_body(&BODY_STR.to_string()).unwrap();
         assert_eq!(payload.lat, 41.74108695983887);
         assert_eq!(payload.lon, -91.84490871429443);
         assert_eq!(payload.sat, 0);
@@ -322,5 +343,21 @@ mod tests {
         // several repeated timestamps should all be the same
         assert_eq!(payload.timestamp, payload.time);
         assert_eq!(payload.timeoffset, payload.time);
+    }
+
+    /// Test the conversion of a Payload struct to a Location struct.
+    #[test]
+    fn test_to_location() {
+        let payload = Payload::from_http_body(&BODY_STR.to_string()).unwrap();
+        let username = "testuser".to_string();
+        let location = payload.to_location(&username);
+        assert_eq!(location.username, username);
+        assert_eq!(location.time_utc, payload.time);
+        assert_eq!(location.time_local, payload.timeoffset);
+        assert_eq!(location.latitude, payload.lat);
+        assert_eq!(location.longitude, payload.lon);
+        assert_eq!(location.altitude, payload.alt);
+        assert_eq!(location.accuracy, Some(payload.acc));
+        assert_eq!(location.source, Source::GpsLogger);
     }
 }
