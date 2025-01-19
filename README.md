@@ -1,9 +1,6 @@
 Crataegus
 ===
 ## To Do
-- source:
-    - GPSLOGGER
-    - PHOTO
 - photo import
     - harvest gps data from exif, set time from gps time and do a timezone lookup instead of using other image parameters for local time.
 - get rid of unwrap / graceful error handling

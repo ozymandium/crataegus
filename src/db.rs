@@ -220,7 +220,7 @@ mod tests {
             longitude: 1.0,
             altitude: 1.0,
             accuracy: Some(1.0),
-            source: location::Source::Jpeg,
+            source: location::Source::Exif
         };
         let err = db.location_insert(loc3).await.unwrap_err(); // same user/time with different location
         assert!(err
