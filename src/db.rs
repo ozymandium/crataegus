@@ -183,6 +183,10 @@ mod tests {
         .await
         .unwrap();
         assert_eq!(db.location_count().await, 0);
+        // add user to the database
+        db.user_insert(&"test".to_string(), &"pass".to_string())
+            .await
+            .unwrap();
         let username = "test".to_string();
         let time_utc = DateTime::parse_from_rfc3339("2025-01-16T03:54:51.000Z")
             .unwrap()
@@ -196,6 +200,7 @@ mod tests {
             longitude: 0.0,
             altitude: 0.0,
             accuracy: Some(0.0),
+            source: location::Source::GpsLogger,
         };
         db.location_insert(loc.clone()).await.unwrap();
         assert_eq!(db.location_count().await, 1); // successfully added the first entry
@@ -215,6 +220,7 @@ mod tests {
             longitude: 1.0,
             altitude: 1.0,
             accuracy: Some(1.0),
+            source: location::Source::Jpeg,
         };
         let err = db.location_insert(loc3).await.unwrap_err(); // same user/time with different location
         assert!(err
@@ -253,5 +259,43 @@ mod tests {
                 .unwrap(),
             false
         );
+    }
+
+    // creates an ephemeral database and checks the username relation
+    #[tokio::test]
+    async fn test_username_foreign_key_relation() {
+        let db_file = NamedTempFile::new().unwrap();
+        let db = Db::new(Config {
+            path: db_file.path().to_path_buf(),
+        })
+        .await
+        .unwrap();
+        let valid_username = "user".to_string();
+        let invalid_username = "invalid".to_string();
+        let mut loc = Location {
+            username: valid_username.clone(),
+            time_utc: DateTime::parse_from_rfc3339("2025-01-16T03:54:51.000Z")
+                .unwrap()
+                .with_timezone(&Utc),
+            time_local: DateTime::parse_from_rfc3339("2025-01-16T03:54:51.000Z")
+                .unwrap()
+                .with_timezone(&chrono::FixedOffset::west_opt(3600).unwrap()),
+            latitude: 0.0,
+            longitude: 0.0,
+            altitude: 0.0,
+            accuracy: Some(0.0),
+            source: location::Source::GpsLogger,
+        };
+        // insert the location should fail since no user exists
+        assert!(db.location_insert(loc.clone()).await.is_err());
+        // insert the user
+        db.user_insert(&valid_username, &"pass".to_string())
+            .await
+            .unwrap();
+        // insert the location should succeed now
+        db.location_insert(loc.clone()).await.unwrap();
+        // insert the location with an invalid username should fail
+        loc.username = invalid_username.clone();
+        assert!(db.location_insert(loc.clone()).await.is_err());
     }
 }

@@ -19,7 +19,7 @@ use std::sync::Arc;
 
 use crate::db::Db;
 use crate::gpslogger;
-use crate::schema::Location;
+use crate::schema::{Location, Source};
 
 /// Configuration for the server
 #[derive(Debug, Deserialize)]
@@ -127,6 +127,7 @@ impl Server {
             longitude: payload.lon,
             altitude: payload.alt,
             accuracy: Some(payload.acc),
+            source: Source::GpsLogger,
         };
         server.db.location_insert(location).await.unwrap();
         Response::new(Body::from("Request received"))
