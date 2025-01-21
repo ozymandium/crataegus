@@ -30,10 +30,24 @@ pub struct Config {
 
 #[derive(Subcommand, Debug)]
 enum Cmd {
-    /// Start the server
+    /// Start the HTTP server.
     Serve,
-    /// Add a user to the database
+    /// Add a user to the database.
     Useradd,
+    /// Import locations into the database.
+    Import {
+        #[clap(subcommand)]
+        source: ImportSource,
+    }
+}
+
+#[derive(Subcommand, Debug)]
+enum ImportSource {
+    /// Recursively search for EXIF GPSInfo in the given directory, importing it into the database.
+    ExifDir {
+        /// The directory to search.
+        path: PathBuf,
+    },
 }
 
 /// Implementation of the Config struct
@@ -74,6 +88,20 @@ async fn useradd(config: Config) -> Result<()> {
     Ok(())
 }
 
+async fn import_exif_dir(config: Config, path: PathBuf) -> Result<()> {
+    use crataegus::exif::Finder;
+    println!("Importing locations from directory: {}", path.display());
+    let db = Arc::new(Db::new(config.db).await?);
+    let finder = Finder::new(&path);
+    let mut count = 0; 
+    for location in finder {
+        //db.location_insert(location).await?;
+        count += 1;  
+    }
+    println!("Imported {} locations", count);  
+    Ok(())
+}
+
 #[tokio::main]
 async fn main() -> Result<()> {
     color_eyre::install().unwrap();
@@ -88,8 +116,12 @@ async fn main() -> Result<()> {
     match args.cmd {
         Cmd::Serve => serve(config).await?,
         Cmd::Useradd => useradd(config).await?,
+        Cmd::Import { source } => match source {
+            ImportSource::ExifDir { path } => {
+                import_exif_dir(config, path).await?;
+            }
+        },
     }
 
-    info!("Crataegus has stopped");
     Ok(())
 }
