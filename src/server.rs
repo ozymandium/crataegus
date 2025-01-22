@@ -50,7 +50,6 @@ impl Server {
         let server = Arc::new(self);
         let protected_routes = Router::new()
             .route("/gpslogger", post(Self::handle_gpslogger))
-            //.layer(middleware::from_fn(Self::auth)); // leave this line last
             .layer(middleware::from_fn_with_state(server.clone(), Self::auth));
         let router = Router::new()
             .merge(protected_routes)

@@ -34,6 +34,8 @@ enum Cmd {
     Serve,
     /// Add a user to the database
     Useradd,
+    /// Backup the database. May be called while server is running.
+    Backup,
 }
 
 /// Implementation of the Config struct
@@ -74,6 +76,14 @@ async fn useradd(config: Config) -> Result<()> {
     Ok(())
 }
 
+async fn backup(config: Config) -> Result<()> {
+    println!("Backing up the database");
+    let db = Arc::new(Db::new(config.db).await?);
+    db.backup().await?;
+    println!("Database backed up successfully");
+    Ok(())
+}
+
 #[tokio::main]
 async fn main() -> Result<()> {
     color_eyre::install().unwrap();
@@ -88,6 +98,7 @@ async fn main() -> Result<()> {
     match args.cmd {
         Cmd::Serve => serve(config).await?,
         Cmd::Useradd => useradd(config).await?,
+        Cmd::Backup => backup(config).await?,
     }
 
     info!("Crataegus has stopped");
