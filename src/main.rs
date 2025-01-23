@@ -1,13 +1,17 @@
 use std::path::PathBuf;
 use std::sync::Arc;
 
+use chrono::FixedOffset;
+use chrono_english::parse_date_string;
 use clap::{Parser, Subcommand};
 use color_eyre::eyre::{eyre, Result};
+use futures::StreamExt;
 use inquire::{Password, Text};
 use log::info;
 use serde::Deserialize;
 
 use crataegus::db::{Config as DbConfig, Db};
+use crataegus::export::{Exporter, Format};
 use crataegus::server::{Config as ServerConfig, Server};
 
 #[derive(Parser, Debug)]
@@ -36,6 +40,19 @@ enum Cmd {
     Useradd,
     /// Backup the database. May be called while server is running.
     Backup,
+    /// Export the database to a file
+    Export {
+        // all these values are required
+        #[arg(value_enum)]
+        format: Format,
+
+        #[clap(value_hint = clap::ValueHint::FilePath, required = true)]
+        path: PathBuf,
+
+        start_str: String,
+
+        stop_str: String,
+    },
 }
 
 /// Implementation of the Config struct
@@ -84,6 +101,50 @@ async fn backup(config: Config) -> Result<()> {
     Ok(())
 }
 
+async fn export(
+    config: Config,
+    format: Format,
+    path: PathBuf,
+    start_str: String,
+    stop_str: String,
+) -> Result<()> {
+    println!("Exporting the database");
+    let now = chrono::offset::Local::now().fixed_offset();
+    let start = match parse_date_string::<FixedOffset>(
+        &start_str,
+        now.clone(),
+        chrono_english::Dialect::Us,
+    ) {
+        Ok(date) => date.to_utc(),
+        Err(_) => return Err(eyre!("Invalid start date: {}", start_str)),
+    };
+    let stop =
+        match parse_date_string::<FixedOffset>(&stop_str, now.clone(), chrono_english::Dialect::Us)
+        {
+            Ok(date) => date.to_utc(),
+            Err(_) => return Err(eyre!("Invalid stop date: {}", stop_str)),
+        };
+    let db = Arc::new(Db::new(config.db).await?);
+    let name = format!(
+        "crataegus_export_{}_{}",
+        start.to_rfc3339(),
+        stop.to_rfc3339()
+    );
+    let mut exporter = crataegus::export::create_exporter(format, &name, &path)?;
+    let mut location_stream = db.location_get(start, stop).await?;
+    //for location in location_stream {
+    //    let location = location?;
+    //    exporter.write_location(&location)?;
+    //}
+    while let Some(location) = location_stream.next().await {
+        let location = location?;
+        exporter.write_location(&location)?;
+    }
+    exporter.finish()?;
+    println!("Database exported successfully");
+    Ok(())
+}
+
 #[tokio::main]
 async fn main() -> Result<()> {
     color_eyre::install().unwrap();
@@ -99,6 +160,12 @@ async fn main() -> Result<()> {
         Cmd::Serve => serve(config).await?,
         Cmd::Useradd => useradd(config).await?,
         Cmd::Backup => backup(config).await?,
+        Cmd::Export {
+            format,
+            path,
+            start_str,
+            stop_str,
+        } => export(config, format, path, start_str, stop_str).await?,
     }
 
     info!("Crataegus has stopped");

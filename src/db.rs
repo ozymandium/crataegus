@@ -1,12 +1,14 @@
+use chrono::{DateTime, Utc};
 use color_eyre::eyre::{eyre, Result, WrapErr};
+use futures::Stream;
 use log::{debug, info, LevelFilter};
 use sea_orm::{
-    ActiveModelTrait, ColumnTrait, ConnectOptions, ConnectionTrait, Database, DatabaseConnection,
-    EntityTrait, IntoActiveModel, QueryFilter, Schema, SqlErr,
+    error::DbErr, ActiveModelTrait, ColumnTrait, ConnectOptions, ConnectionTrait, Database,
+    DatabaseConnection, EntityTrait, IntoActiveModel, QueryFilter, QueryOrder, Schema, SqlErr,
 };
 use serde::Deserialize;
 
-use std::path::PathBuf;
+use std::{iter::Iterator, path::PathBuf};
 
 use crate::schema::{location, user, Location, SanityCheck};
 
@@ -237,6 +239,27 @@ impl Db {
                 }
             }
         }
+    }
+
+    /// Generator function that returns all locations in the database that fall between the
+    /// specified time bounds. Avoids loading all locations into memory at once. Lifetime is tied
+    /// to the database connection.
+    /// # Arguments
+    /// * `start` - The start time of the range, inclusive.
+    /// * `stop` - The stop time of the range, exclusive.
+    /// # Returns
+    /// Locations that fall within the specified time range, in ascending order of time.
+    pub async fn location_get(
+        &self,
+        start: DateTime<Utc>,
+        stop: DateTime<Utc>,
+    ) -> Result<impl Stream<Item = Result<Location, DbErr>> + use<'_>, DbErr> {
+        let stream = location::Entity::find()
+            .filter(location::Column::TimeUtc.between(start, stop))
+            .order_by_asc(location::Column::TimeUtc)
+            .stream(&self.conn)
+            .await?;
+        Ok(stream)
     }
 
     //////////////////

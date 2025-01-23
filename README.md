@@ -1,9 +1,9 @@
 Crataegus
 ===
 ## To Do
-- figure out sqlite backup
-    - rusqlite has backup integration as a feature
-    - how to integrate into restic?
+- export to gpx
+- network locations from GpsLogger will be in MSL
+- ssl
 - get rid of unwrap / graceful error handling
 - photo import
     - harvest gps data from exif, set time from gps time and do a timezone lookup instead of using other image parameters for local time.
