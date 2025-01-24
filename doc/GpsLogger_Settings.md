@@ -14,15 +14,11 @@ GpsLogger Settings
 - Log to custom URL: true
 - Allow auto sending: true
 - Discard offline locations: false
-##### HTTP Body
-```
-%ALL
-```
-This will spit all available fields, but in a format that cannot be 
-##### HTTP Headers
-```
-Content-Type: application/x-www-form-urlencoded
-```
+- URL: `https://<host>.<tailnet>.ts.net:<port>/gpslogger?%ALL`
+- HTTP Body: Empty
+- HTTP Headers: `Content-Type: application/x-www-form-urlencoded`
+- HTTP Method: POST
+- Basic Authentication: fill out user/pass added to db via cli
 ### Performance
 - Log GPS/GNSS Locations: true
 - Log network locations: true
