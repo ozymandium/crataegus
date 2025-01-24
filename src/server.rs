@@ -10,12 +10,12 @@ use axum::{
     Router,
 };
 use axum_auth::AuthBasic;
-use color_eyre::eyre::{Result, WrapErr};
+use axum_server::tls_rustls::RustlsConfig;
+use color_eyre::eyre::{ensure, eyre, Result, WrapErr};
 use log::{debug, error, info, warn};
 use serde::Deserialize;
-use tokio::net::TcpListener;
 
-use std::sync::Arc;
+use std::{net::SocketAddr, path::PathBuf, sync::Arc};
 
 use crate::db::Db;
 use crate::gpslogger;
@@ -25,6 +25,10 @@ use crate::gpslogger;
 pub struct Config {
     /// Port to listen on  
     port: u16,
+    /// Path to the TLS certificate
+    cert: PathBuf,
+    /// Path to the TLS private key
+    key: PathBuf,
 }
 
 /// The server struct
@@ -42,11 +46,18 @@ struct AuthenticatedUser {
 }
 
 impl Server {
-    pub fn new(config: Config, db: Arc<Db>) -> Self {
-        Server { config, db }
+    pub fn new(config: Config, db: Arc<Db>) -> Result<Self> {
+        let _ = rustls::crypto::ring::default_provider()
+            .install_default() // returns a Result<(), Arc(CryptoProvider)>
+            .map_err(|_| eyre!("Failed to install default ring provider"));
+        Ok(Server { config, db })
     }
 
     pub async fn serve(self) -> Result<()> {
+        // config checks
+        ensure!(self.config.cert.exists(), "Certificate file does not exist");
+        ensure!(self.config.key.exists(), "Key file does not exist");
+
         let server = Arc::new(self);
         let protected_routes = Router::new()
             .route("/gpslogger", post(Self::handle_gpslogger))
@@ -55,17 +66,20 @@ impl Server {
             .merge(protected_routes)
             .fallback(Self::handle_fallback)
             .with_state(server.clone());
+        let rustls_config =
+            RustlsConfig::from_pem_file(server.config.cert.clone(), server.config.key.clone())
+                .await
+                .wrap_err("Failed to load TLS config")?;
 
-        let addr = format!("0.0.0.0:{}", server.config.port);
+        let addr = SocketAddr::from(([0, 0, 0, 0], server.config.port));
         info!("Listening on {}", addr);
-        let listener = TcpListener::bind(&addr)
-            .await
-            .wrap_err("Failed to bind to address")?;
 
-        axum::serve(listener, router)
+        axum_server::bind_rustls(addr, rustls_config)
+            .serve(router.into_make_service())
             .await
-            .wrap_err("Failed to serve")?;
-        Ok(()) // This is unreachable
+            .wrap_err("Failed to start server")?;
+
+        Ok(()) // reached after sever is stopped
     }
 
     /// Middleware layer to check for HTTP basic auth

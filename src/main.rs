@@ -27,7 +27,7 @@ struct Args {
 /// Configuration for the server, obtained from main.rs::Args
 #[derive(Debug, Deserialize)]
 pub struct Config {
-    http: ServerConfig,
+    https: ServerConfig,
     db: DbConfig,
 }
 
@@ -69,35 +69,57 @@ impl Config {
         if !path.exists() {
             return Err(eyre!("Config file does not exist: {}", path.display()));
         }
-        let content = std::fs::read_to_string(path)?;
-        let config: Config = toml::from_str(&content)?;
+        let content = std::fs::read_to_string(path)
+            .map_err(|e| eyre!("Failed to read config file: {}", e))?;
+        let config: Config =
+            toml::from_str(&content).map_err(|e| eyre!("Failed to parse config file: {}", e))?;
         Ok(config)
     }
 }
 
 async fn serve(config: Config) -> Result<()> {
     info!("Starting Crataegus server");
-    let db = Arc::new(Db::new(config.db).await?);
-    let server = Server::new(config.http, db);
-    server.serve().await?;
+    let db = Arc::new(
+        Db::new(config.db)
+            .await
+            .map_err(|e| eyre!("Failed to connect to database: {}", e))?,
+    );
+    let server =
+        Server::new(config.https, db).map_err(|e| eyre!("Failed to create server: {}", e))?;
+    server
+        .serve()
+        .await
+        .map_err(|e| eyre!("Server failed: {}", e))?;
     Ok(())
 }
 
 async fn useradd(config: Config) -> Result<()> {
     println!("Adding a user to the database");
-    let db = Arc::new(Db::new(config.db).await?);
+    let db = Arc::new(
+        Db::new(config.db)
+            .await
+            .map_err(|e| eyre!("Failed to connect to database: {}", e))?,
+    );
     println!("Connected to the database. Enter the user information:");
     let username = Text::new("Username").prompt()?;
     let password = Password::new("Password").prompt()?;
-    db.user_insert(&username, &password).await?;
+    db.user_insert(&username, &password)
+        .await
+        .map_err(|e| eyre!("Failed to add user: {}", e))?;
     println!("User added successfully");
     Ok(())
 }
 
 async fn backup(config: Config) -> Result<()> {
     println!("Backing up the database");
-    let db = Arc::new(Db::new(config.db).await?);
-    db.backup().await?;
+    let db = Arc::new(
+        Db::new(config.db)
+            .await
+            .map_err(|e| eyre!("Failed to connect to database: {}", e))?,
+    );
+    db.backup()
+        .await
+        .map_err(|e| eyre!("Failed to backup database: {}", e))?;
     println!("Database backed up successfully");
     Ok(())
 }
@@ -122,20 +144,28 @@ async fn export(
         start,
         stop
     );
-    let db = Arc::new(Db::new(config.db).await?);
+    let db = Arc::new(
+        Db::new(config.db)
+            .await
+            .map_err(|e| eyre!("Failed to connect to database: {}", e))?,
+    );
     let name = format!(
         "crataegus_export_{}_{}",
         start.to_rfc3339(),
         stop.to_rfc3339()
     );
-    let mut exporter = create_exporter(format, &name, &path)?;
+    let mut exporter = create_exporter(format, &name, &path)
+        .map_err(|e| eyre!("Failed to create exporter: {}", e))?;
     let mut location_stream = db
         .location_get(&username, start.to_utc(), stop.to_utc())
-        .await?;
+        .await
+        .map_err(|e| eyre!("Failed to get location stream: {}", e))?;
     let mut count = 0;
     while let Some(location) = location_stream.next().await {
-        let location = location?;
-        exporter.write_location(&location)?;
+        let location = location.map_err(|e| eyre!("A location in the stream failed: {}", e))?;
+        exporter
+            .write_location(&location)
+            .map_err(|e| eyre!("Failed to write location: {}", e))?;
         count += 1;
     }
     exporter.finish()?;
