@@ -127,6 +127,9 @@ impl Server {
 
     async fn handle_fallback(request: Request<Body>) -> Response<Body> {
         warn!("Fallback handler triggered. Request:\n{:#?}", request);
-        Response::new(Body::from("Fallback response"))
+        Response::builder()
+            .status(404)
+            .body(Body::from("Not found"))
+            .unwrap()
     }
 }

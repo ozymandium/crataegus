@@ -1,7 +1,6 @@
 use std::path::PathBuf;
 use std::sync::Arc;
 
-use chrono::FixedOffset;
 use chrono_english::parse_date_string;
 use clap::{Parser, Subcommand};
 use color_eyre::eyre::{eyre, Result};
@@ -11,7 +10,7 @@ use log::info;
 use serde::Deserialize;
 
 use crataegus::db::{Config as DbConfig, Db};
-use crataegus::export::{Exporter, Format};
+use crataegus::export::{create_exporter, Format};
 use crataegus::server::{Config as ServerConfig, Server};
 
 #[derive(Parser, Debug)]
@@ -108,40 +107,34 @@ async fn export(
     start_str: String,
     stop_str: String,
 ) -> Result<()> {
-    println!("Exporting the database");
     let now = chrono::offset::Local::now().fixed_offset();
-    let start = match parse_date_string::<FixedOffset>(
-        &start_str,
-        now.clone(),
-        chrono_english::Dialect::Us,
-    ) {
-        Ok(date) => date.to_utc(),
-        Err(_) => return Err(eyre!("Invalid start date: {}", start_str)),
-    };
-    let stop =
-        match parse_date_string::<FixedOffset>(&stop_str, now.clone(), chrono_english::Dialect::Us)
-        {
-            Ok(date) => date.to_utc(),
-            Err(_) => return Err(eyre!("Invalid stop date: {}", stop_str)),
-        };
+    let start = parse_date_string(&start_str, now, chrono_english::Dialect::Us)
+        .map_err(|_| eyre!("Failed to parse start date"))?;
+    let stop = parse_date_string(&stop_str, now, chrono_english::Dialect::Us)
+        .map_err(|_| eyre!("Failed to parse stop date"))?;
+    println!(
+        "Exporting\n  format: {:?}\n  path: {}\n  start: {}\n  stop: {}",
+        format,
+        path.display(),
+        start,
+        stop
+    );
     let db = Arc::new(Db::new(config.db).await?);
     let name = format!(
         "crataegus_export_{}_{}",
         start.to_rfc3339(),
         stop.to_rfc3339()
     );
-    let mut exporter = crataegus::export::create_exporter(format, &name, &path)?;
-    let mut location_stream = db.location_get(start, stop).await?;
-    //for location in location_stream {
-    //    let location = location?;
-    //    exporter.write_location(&location)?;
-    //}
+    let mut exporter = create_exporter(format, &name, &path)?;
+    let mut location_stream = db.location_get(start.to_utc(), stop.to_utc()).await?;
+    let mut count = 0;
     while let Some(location) = location_stream.next().await {
         let location = location?;
         exporter.write_location(&location)?;
+        count += 1;
     }
     exporter.finish()?;
-    println!("Database exported successfully");
+    println!("Exported {} locations", count);
     Ok(())
 }
 
@@ -151,10 +144,10 @@ async fn main() -> Result<()> {
     env_logger::init();
 
     let args = Args::parse();
-    info!("{:#?}", args);
+    println!("{:#?}", args);
 
     let config = Config::load(&args.config)?;
-    info!("{:#?}", config);
+    println!("{:#?}", config);
 
     match args.cmd {
         Cmd::Serve => serve(config).await?,
