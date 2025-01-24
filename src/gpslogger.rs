@@ -1,4 +1,9 @@
-use crate::schema::{Location, Source};
+use crate::schema::{Location, LocationGen, Source};
+use chrono::{DateTime, FixedOffset, NaiveDate, Utc};
+use color_eyre::eyre::Result;
+use serde::de::{self, Deserializer};
+use serde::Deserialize;
+
 /// The body of the HTTP message is specified by a template that is configured in the GpsLogger app.
 /// Its value should be set to `%ALL`. This will result in a body string that looks like this:
 /// ```txt
@@ -76,10 +81,6 @@ use crate::schema::{Location, Source};
 /// set the template to `%ALL` and allow user app updates to be handled in the server. This struct
 /// does no type conversion (e.g., for timestamps), and only stores data in the type in which it is
 /// received.
-use chrono::{DateTime, FixedOffset, NaiveDate, Utc};
-use color_eyre::eyre::{eyre, Result};
-use serde::de::{self, Deserializer};
-use serde::Deserialize;
 
 /// Some fields are optional floats that may be empty. Give serde a way to deserialize those.
 /// # Arguments
@@ -157,8 +158,11 @@ where
     NaiveDate::parse_from_str(&s, "%Y-%m-%d").map_err(de::Error::custom)
 }
 
+/// Parameters that are sent in the URL of an HTTP POST request from the GpsLogger app when
+/// GPSLogger is configured with the %ALL parameter. Note that this information is different from
+/// the information that is available in the CSV logs.
 #[derive(Deserialize, Debug)]
-pub struct Payload {
+pub struct UrlPayload {
     /// Latitude in decimal degrees.
     /// Example: `41.74108695983887`.
     pub lat: f64,
@@ -267,25 +271,13 @@ pub struct Payload {
     dist: f32,
 }
 
-impl Payload {
-    /// Create a Payload struct from a HTTP Payload string.
-    ///
-    /// # Arguments
-    /// * `body_str` - A string containing the body of a HTTP message.
-    ///
-    /// # Return
-    /// Payload struct containing the parsed data.
-    pub fn from_http_body(body_str: &String) -> Result<Payload> {
-        serde_urlencoded::from_str(body_str)
-            .map_err(|e| eyre!("Failed to parse body string: {}", e))
-    }
-
+impl LocationGen for UrlPayload {
     /// Convert the Payload struct to a Location struct.
     /// # Arguments
     /// * `username` - The username to associate with the location.
     /// # Return
     /// A Location struct with the data from the Payload struct.
-    pub fn to_location(&self, username: &String) -> Location {
+    fn to_location(&self, username: &String) -> Location {
         Location {
             username: username.clone(),
             time_utc: self.time,
@@ -313,7 +305,7 @@ mod tests {
     /// An actual body string observed from the GpsLogger app.
     #[test]
     fn test_from_http_body() {
-        let payload = Payload::from_http_body(&BODY_STR.to_string()).unwrap();
+        let payload: UrlPayload = serde_urlencoded::from_str(BODY_STR).unwrap();
         assert_eq!(payload.lat, 41.74108695983887);
         assert_eq!(payload.lon, -91.84490871429443);
         assert_eq!(payload.sat, 0);
@@ -348,9 +340,9 @@ mod tests {
     /// Test the conversion of a Payload struct to a Location struct.
     #[test]
     fn test_to_location() {
-        let payload = Payload::from_http_body(&BODY_STR.to_string()).unwrap();
+        let payload: UrlPayload = serde_urlencoded::from_str(BODY_STR).unwrap();
         let username = "testuser".to_string();
-        let location = payload.to_location(&username);
+        let location = LocationGen::to_location(&payload, &username);
         assert_eq!(location.username, username);
         assert_eq!(location.time_utc, payload.time);
         assert_eq!(location.time_local, payload.timeoffset);

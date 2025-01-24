@@ -1,7 +1,7 @@
 use axum::{
-    body::to_bytes,
     body::Body,
     extract::Extension,
+    extract::Query,
     extract::State,
     http::Request,
     middleware::{self, Next},
@@ -12,13 +12,14 @@ use axum::{
 use axum_auth::AuthBasic;
 use axum_server::tls_rustls::RustlsConfig;
 use color_eyre::eyre::{ensure, eyre, Result, WrapErr};
-use log::{debug, error, info, warn};
+use log::{debug, info, warn};
 use serde::Deserialize;
 
 use std::{net::SocketAddr, path::PathBuf, sync::Arc};
 
 use crate::db::Db;
 use crate::gpslogger;
+use crate::schema::LocationGen;
 
 /// Configuration for the server
 #[derive(Debug, Deserialize)]
@@ -82,7 +83,7 @@ impl Server {
         Ok(()) // reached after sever is stopped
     }
 
-    /// Middleware layer to check for HTTP basic auth
+    /// Middleware layer to check for HTTP basic auth, used for user auth
     async fn auth(
         State(server): State<Arc<Server>>,
         AuthBasic((username, password)): AuthBasic,
@@ -106,34 +107,15 @@ impl Server {
         next.run(request).await
     }
 
-    async fn get_body_string(request: Request<Body>) -> String {
-        let content_length = request
-            .headers()
-            .get("content-length")
-            .and_then(|value| value.to_str().ok())
-            .and_then(|value| value.parse().ok())
-            .unwrap_or(0);
-        let body_bytes = to_bytes(request.into_body(), content_length).await.unwrap();
-        String::from_utf8(body_bytes.to_vec()).unwrap()
-    }
-
     async fn handle_gpslogger(
         State(server): State<Arc<Server>>,
         Extension(AuthenticatedUser { username }): Extension<AuthenticatedUser>,
-        request: Request<Body>,
+        Query(payload): Query<gpslogger::UrlPayload>, // auto extracts query params
     ) -> Response<Body> {
-        debug!("Request received: {:?}", request);
-        let body = Self::get_body_string(request).await;
-        let payload = match gpslogger::Payload::from_http_body(&body) {
-            Ok(payload) => payload,
-            Err(e) => {
-                error!("Failed to parse body: {}", e);
-                return Response::new(Body::from("Failed to parse body"));
-            }
-        };
+        debug!("gpslogger url payload: {:?}", payload);
         server
             .db
-            .location_insert(payload.to_location(&username))
+            .location_insert(LocationGen::to_location(&payload, &username))
             .await
             .unwrap();
         Response::new(Body::from("Request received"))

@@ -1,7 +1,7 @@
 use chrono::{DateTime, Utc};
 use color_eyre::eyre::{eyre, Result, WrapErr};
 use futures::Stream;
-use log::{debug, info, LevelFilter};
+use log::{debug, LevelFilter};
 use sea_orm::{
     error::DbErr, ActiveModelTrait, ColumnTrait, ConnectOptions, ConnectionTrait, Database,
     DatabaseConnection, EntityTrait, IntoActiveModel, QueryFilter, QueryOrder, Schema, SqlErr,
