@@ -48,6 +48,8 @@ enum Cmd {
         #[clap(value_hint = clap::ValueHint::FilePath, required = true)]
         path: PathBuf,
 
+        username: String,
+
         start_str: String,
 
         stop_str: String,
@@ -104,6 +106,7 @@ async fn export(
     config: Config,
     format: Format,
     path: PathBuf,
+    username: String,
     start_str: String,
     stop_str: String,
 ) -> Result<()> {
@@ -126,7 +129,9 @@ async fn export(
         stop.to_rfc3339()
     );
     let mut exporter = create_exporter(format, &name, &path)?;
-    let mut location_stream = db.location_get(start.to_utc(), stop.to_utc()).await?;
+    let mut location_stream = db
+        .location_get(&username, start.to_utc(), stop.to_utc())
+        .await?;
     let mut count = 0;
     while let Some(location) = location_stream.next().await {
         let location = location?;
@@ -156,9 +161,10 @@ async fn main() -> Result<()> {
         Cmd::Export {
             format,
             path,
+            username,
             start_str,
             stop_str,
-        } => export(config, format, path, start_str, stop_str).await?,
+        } => export(config, format, path, username, start_str, stop_str).await?,
     }
 
     info!("Crataegus has stopped");

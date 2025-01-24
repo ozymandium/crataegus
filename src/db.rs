@@ -251,10 +251,12 @@ impl Db {
     /// Locations that fall within the specified time range, in ascending order of time.
     pub async fn location_get(
         &self,
+        username: &String,
         start: DateTime<Utc>,
         stop: DateTime<Utc>,
     ) -> Result<impl Stream<Item = Result<Location, DbErr>> + use<'_>, DbErr> {
         let stream = location::Entity::find()
+            .filter(location::Column::Username.eq(username))
             .filter(location::Column::TimeUtc.between(start, stop))
             .order_by_asc(location::Column::TimeUtc)
             .stream(&self.conn)
@@ -459,6 +461,145 @@ mod tests {
         for (path, expected) in paths_and_expectations {
             println!("{:?} -> {}", path, expected);
             assert_eq!(db.is_backup(&path), expected);
+        }
+    }
+
+    #[tokio::test]
+    async fn test_location_get() {
+        use futures::StreamExt;
+        let db_file = NamedTempFile::new().unwrap();
+        let db = Db::new(Config {
+            path: db_file.path().to_path_buf(),
+            backups: 1,
+        })
+        .await
+        .unwrap();
+        db.user_insert(&"user1".to_string(), &"pass".to_string())
+            .await
+            .unwrap();
+        db.user_insert(&"user2".to_string(), &"pass".to_string())
+            .await
+            .unwrap();
+        let times = vec![
+            DateTime::parse_from_rfc3339("2024-12-31T00:00:00.000Z")
+                .unwrap()
+                .with_timezone(&Utc),
+            DateTime::parse_from_rfc3339("2025-01-01T00:00:00.000Z")
+                .unwrap()
+                .with_timezone(&Utc),
+            DateTime::parse_from_rfc3339("2025-01-02T00:00:00.000Z")
+                .unwrap()
+                .with_timezone(&Utc),
+            DateTime::parse_from_rfc3339("2025-01-03T00:00:00.000Z")
+                .unwrap()
+                .with_timezone(&Utc),
+            DateTime::parse_from_rfc3339("2025-01-04T00:00:00.000Z")
+                .unwrap()
+                .with_timezone(&Utc),
+            DateTime::parse_from_rfc3339("2025-01-05T00:00:00.000Z")
+                .unwrap()
+                .with_timezone(&Utc),
+            DateTime::parse_from_rfc3339("2025-01-06T00:00:00.000Z")
+                .unwrap()
+                .with_timezone(&Utc),
+        ];
+        let locs = vec![
+            Location {
+                username: "user1".to_string(),
+                time_utc: times[1],
+                time_local: times[1].with_timezone(&chrono::FixedOffset::west_opt(3600).unwrap()),
+                latitude: 1.0,
+                longitude: 1.0,
+                altitude: 1.0,
+                accuracy: Some(1.0),
+                source: location::Source::GpsLogger,
+            },
+            Location {
+                username: "user2".to_string(),
+                time_utc: times[2],
+                time_local: times[2].with_timezone(&chrono::FixedOffset::west_opt(3600).unwrap()),
+                latitude: 2.0,
+                longitude: 2.0,
+                altitude: 2.0,
+                accuracy: Some(2.0),
+                source: location::Source::GpsLogger,
+            },
+            Location {
+                username: "user1".to_string(),
+                time_utc: times[3],
+                time_local: times[3].with_timezone(&chrono::FixedOffset::west_opt(3600).unwrap()),
+                latitude: 3.0,
+                longitude: 3.0,
+                altitude: 3.0,
+                accuracy: Some(3.0),
+                source: location::Source::GpsLogger,
+            },
+            Location {
+                username: "user2".to_string(),
+                time_utc: times[4],
+                time_local: times[4].with_timezone(&chrono::FixedOffset::west_opt(3600).unwrap()),
+                latitude: 4.0,
+                longitude: 4.0,
+                altitude: 4.0,
+                accuracy: Some(4.0),
+                source: location::Source::GpsLogger,
+            },
+            Location {
+                username: "user1".to_string(),
+                time_utc: times[5],
+                time_local: times[5].with_timezone(&chrono::FixedOffset::west_opt(3600).unwrap()),
+                latitude: 5.0,
+                longitude: 5.0,
+                altitude: 5.0,
+                accuracy: Some(5.0),
+                source: location::Source::GpsLogger,
+            },
+        ];
+        for loc in locs.iter() {
+            db.location_insert(loc.clone()).await.unwrap();
+        }
+        // first just do an easy one with a bound that includes all the locations and check that
+        // the user filter works
+        {
+            let expected_idxs = vec![0, 2, 4];
+            let mut stream = db
+                .location_get(&"user1".to_string(), times[0], times[6])
+                .await
+                .unwrap();
+            let mut count = 0;
+            while let Some(loc) = stream.next().await {
+                assert!(count < expected_idxs.len());
+                let loc = loc.unwrap();
+                assert_eq!(loc, locs[expected_idxs[count]]);
+                count += 1;
+            }
+            assert_eq!(count, expected_idxs.len());
+        }
+        {
+            let expected_idxs = vec![1, 3];
+            let mut stream = db
+                .location_get(&"user2".to_string(), times[0], times[6])
+                .await
+                .unwrap();
+            let mut count = 0;
+            while let Some(loc) = stream.next().await {
+                assert!(count < expected_idxs.len());
+                let loc = loc.unwrap();
+                assert_eq!(loc, locs[expected_idxs[count]]);
+                count += 1;
+            }
+            assert_eq!(count, expected_idxs.len());
+        }
+        // now grab only a subset
+        {
+            let expected_idx = 1;
+            let mut stream = db
+                .location_get(&"user2".to_string(), times[1], times[3])
+                .await
+                .unwrap();
+            let loc = stream.next().await.unwrap().unwrap();
+            assert_eq!(loc, locs[expected_idx]);
+            assert!(stream.next().await.is_none());
         }
     }
 }
