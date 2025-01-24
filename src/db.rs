@@ -45,7 +45,6 @@ impl Db {
         let conn = Database::connect(options)
             .await
             .wrap_err("Failed to connect to the database")?;
-        info!("Database does not exist, creating it");
         let schema = Schema::new(conn.get_database_backend());
         // add all the tables
         conn.execute(
