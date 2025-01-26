@@ -1,5 +1,6 @@
 use chrono::{DateTime, Utc};
 use color_eyre::eyre::{eyre, Result, WrapErr};
+//use futures::{Stream, StreamExt};
 use futures::Stream;
 use log::{debug, LevelFilter};
 use sea_orm::{
@@ -16,9 +17,9 @@ use crate::schema::{location, user, Location, SanityCheck};
 #[derive(Deserialize, Debug, Clone)]
 pub struct Config {
     /// Path to the SQLite database file
-    path: PathBuf,
+    pub path: PathBuf,
     /// Keep this many most recent backups
-    backups: usize,
+    pub backups: usize,
 }
 
 /// The database struct used by the server and the app. SQLite is used as the database backend, and
@@ -211,13 +212,13 @@ impl Db {
     /// # Arguments
     /// * `loc` - The location to record
     /// # Returns
-    /// `Ok(())` if the location was successfully recorded, or already exists in the database. An
+    /// `Ok(true)` if the location was successfully recorded, Ok(false) if the locations already exists in the database. An
     /// error otherwise.
-    pub async fn location_insert(&self, loc: Location) -> Result<()> {
+    pub async fn location_insert(&self, loc: Location) -> Result<bool> {
         loc.sanity_check()?;
         let active_loc = loc.clone().into_active_model();
         match active_loc.insert(&self.conn).await {
-            Ok(_) => Ok(()),
+            Ok(_) => Ok(true),
             Err(e) => {
                 if let Some(SqlErr::UniqueConstraintViolation(_)) = e.sql_err() {
                     let orig = location::Entity::find()
@@ -229,12 +230,20 @@ impl Db {
                         .ok_or_else(|| eyre!("Got unique constraint violation but couldn't find the original:\n{:?}", loc))?;
                     if loc == orig {
                         debug!("Ignoring duplicate location entry: {:?}", loc);
-                        Ok(())
+                        Ok(false)
                     } else {
                         Err(e).wrap_err(format!("Received user/time info that is duplicated, but other fields differ.\nOriginal: {:?}\nReceived: {:?}", orig, loc))
                     }
+                } else if let Some(SqlErr::ForeignKeyConstraintViolation(_)) = e.sql_err() {
+                    Err(e).wrap_err(format!(
+                        "User `{}` does not exist in the database. Cannot insert location.",
+                        loc.username
+                    ))
                 } else {
-                    Err(e).wrap_err("Failed to insert location into database")
+                    Err(e).wrap_err(format!(
+                        "Failed to insert location into database for unknown reason: {:?}",
+                        loc
+                    ))
                 }
             }
         }
@@ -263,6 +272,22 @@ impl Db {
         Ok(stream)
     }
 
+    #[cfg(test)]
+    pub async fn location_vec(
+        &self,
+        username: &String,
+        start: DateTime<Utc>,
+        stop: DateTime<Utc>,
+    ) -> Result<Vec<Location>> {
+        use futures::StreamExt;
+        let mut stream = self.location_stream(username, start, stop).await?;
+        let mut vec = Vec::new();
+        while let Some(loc) = stream.next().await {
+            vec.push(loc?);
+        }
+        Ok(vec)
+    }
+
     //////////////////
     // Test Helpers //
     //////////////////
@@ -286,6 +311,7 @@ impl Db {
 mod tests {
     use super::*;
     use chrono::{DateTime, Utc};
+    use pretty_assertions::assert_eq;
     use tempfile::NamedTempFile;
 
     /// Creates an ephemeral database for testing and tries to add identical entries to the
