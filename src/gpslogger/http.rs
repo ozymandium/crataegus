@@ -1,9 +1,13 @@
-use crate::schema::{Location, LocationGen, Source};
 use chrono::{DateTime, FixedOffset, NaiveDate, Utc};
-use color_eyre::eyre::Result;
-use serde::de::{self, Deserializer};
 use serde::Deserialize;
 
+use crate::gpslogger::deserializers::{
+    deserialize_date_from_str, deserialize_date_time_fixed_offset_from_str,
+    deserialize_date_time_utc_from_sec, deserialize_date_time_utc_from_str, deserialize_option_f32,
+};
+use crate::schema::{Location, LocationGen, Source};
+
+/// # HTTP
 /// The body of the HTTP message is specified by a template that is configured in the GpsLogger app.
 /// Its value should be set to `%ALL`. This will result in a body string that looks like this:
 /// ```txt
@@ -75,94 +79,18 @@ use serde::Deserialize;
 /// ```
 ///
 /// Note the following fields appear with `%ALL` but do not have specific named parameters:
-/// - `act`: unknown
+/// - `act`: unknown. this is ommitted from the URLPayload struct.
 ///
 /// However, we choose to manually parse the default body string. This way, the user only needs to
 /// set the template to `%ALL` and allow user app updates to be handled in the server. This struct
 /// does no type conversion (e.g., for timestamps), and only stores data in the type in which it is
 /// received.
-
-/// Some fields are optional floats that may be empty. Give serde a way to deserialize those.
-/// # Arguments
-/// * `deserializer` - The serde deserializer.
-/// # Return
-/// An Option<f32> if the field is present, or None if it is not.
-fn deserialize_option_f32<'de, D>(deserializer: D) -> Result<Option<f32>, D::Error>
-where
-    D: Deserializer<'de>,
-{
-    let opt = Option::<String>::deserialize(deserializer)?;
-    match opt.as_deref() {
-        Some("") | None => Ok(None),
-        Some(s) => s.parse::<f32>().map(Some).map_err(de::Error::custom),
-    }
-}
-
-/// Deserializer for `DateTime<Utc>` from ISO 8601 strings.
-/// # Arguments
-/// * `deserializer` - The serde deserializer.
-/// # Return
-/// A DateTime<Utc> if the string is parseable, or an error if it is not.
-fn deserialize_date_time_utc_from_str<'de, D>(deserializer: D) -> Result<DateTime<Utc>, D::Error>
-where
-    D: Deserializer<'de>,
-{
-    let s = String::deserialize(deserializer)?;
-    Ok(DateTime::parse_from_rfc3339(&s)
-        .expect("Invalid RFC3339 string")
-        .to_utc())
-}
-
-/// Deserializer for `DateTime<FixedOffset>` from ISO 8601 strings.
-/// # Arguments
-/// * `deserializer` - The serde deserializer.
-/// # Return
-/// A DateTime<FixedOffset> if the string is parseable, or an error if it is not.
-fn deserialize_date_time_fixed_offset_from_str<'de, D>(
-    deserializer: D,
-) -> Result<DateTime<FixedOffset>, D::Error>
-where
-    D: Deserializer<'de>,
-{
-    let s = String::deserialize(deserializer)?;
-    Ok(DateTime::parse_from_rfc3339(&s).expect("Invalid RFC3339 string"))
-}
-
-/// Deserializer for `DateTime<Utc>` from ISO 8601 strings.
-/// # Arguments
-/// * `deserializer` - The serde deserializer.
-/// # Return
-/// A DateTime<Utc> if the string is parseable, or an error if it is not.
-fn deserialize_date_time_utc_from_sec<'de, D>(deserializer: D) -> Result<DateTime<Utc>, D::Error>
-where
-    D: Deserializer<'de>,
-{
-    let ts = String::deserialize(deserializer)?
-        .parse::<i64>()
-        .map_err(de::Error::custom)?;
-    Ok(DateTime::from_timestamp(ts, 0)
-        .expect("Invalid timestamp")
-        .to_utc())
-}
-
-/// Deserializer for `NaiveDate` from ISO 8601 strings.
-/// # Arguments
-/// * `deserializer` - The serde deserializer.
-/// # Return
-/// A NaiveDate if the string is parseable, or an error if it is not.
-fn deserialize_date_from_str<'de, D>(deserializer: D) -> Result<NaiveDate, D::Error>
-where
-    D: Deserializer<'de>,
-{
-    let s = String::deserialize(deserializer)?;
-    NaiveDate::parse_from_str(&s, "%Y-%m-%d").map_err(de::Error::custom)
-}
-
+///
 /// Parameters that are sent in the URL of an HTTP POST request from the GpsLogger app when
 /// GPSLogger is configured with the %ALL parameter. Note that this information is different from
 /// the information that is available in the CSV logs.
 #[derive(Deserialize, Debug)]
-pub struct UrlPayload {
+pub struct Payload {
     /// Latitude in decimal degrees.
     /// Example: `41.74108695983887`.
     pub lat: f64,
@@ -271,7 +199,7 @@ pub struct UrlPayload {
     dist: f32,
 }
 
-impl LocationGen for UrlPayload {
+impl LocationGen for Payload {
     /// Convert the Payload struct to a Location struct.
     /// # Arguments
     /// * `username` - The username to associate with the location.
@@ -305,7 +233,7 @@ mod tests {
     /// An actual body string observed from the GpsLogger app.
     #[test]
     fn test_from_http_body() {
-        let payload: UrlPayload = serde_urlencoded::from_str(BODY_STR).unwrap();
+        let payload: Payload = serde_urlencoded::from_str(BODY_STR).unwrap();
         assert_eq!(payload.lat, 41.74108695983887);
         assert_eq!(payload.lon, -91.84490871429443);
         assert_eq!(payload.sat, 0);
@@ -340,7 +268,7 @@ mod tests {
     /// Test the conversion of a Payload struct to a Location struct.
     #[test]
     fn test_to_location() {
-        let payload: UrlPayload = serde_urlencoded::from_str(BODY_STR).unwrap();
+        let payload: Payload = serde_urlencoded::from_str(BODY_STR).unwrap();
         let username = "testuser".to_string();
         let location = LocationGen::to_location(&payload, &username);
         assert_eq!(location.username, username);

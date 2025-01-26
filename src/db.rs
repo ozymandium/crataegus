@@ -248,7 +248,7 @@ impl Db {
     /// * `stop` - The stop time of the range, exclusive.
     /// # Returns
     /// Locations that fall within the specified time range, in ascending order of time.
-    pub async fn location_get(
+    pub async fn location_stream(
         &self,
         username: &String,
         start: DateTime<Utc>,
@@ -562,7 +562,7 @@ mod tests {
         {
             let expected_idxs = vec![0, 2, 4];
             let mut stream = db
-                .location_get(&"user1".to_string(), times[0], times[6])
+                .location_stream(&"user1".to_string(), times[0], times[6])
                 .await
                 .unwrap();
             let mut count = 0;
@@ -577,7 +577,7 @@ mod tests {
         {
             let expected_idxs = vec![1, 3];
             let mut stream = db
-                .location_get(&"user2".to_string(), times[0], times[6])
+                .location_stream(&"user2".to_string(), times[0], times[6])
                 .await
                 .unwrap();
             let mut count = 0;
@@ -593,7 +593,7 @@ mod tests {
         {
             let expected_idx = 1;
             let mut stream = db
-                .location_get(&"user2".to_string(), times[1], times[3])
+                .location_stream(&"user2".to_string(), times[1], times[3])
                 .await
                 .unwrap();
             let loc = stream.next().await.unwrap().unwrap();

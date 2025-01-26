@@ -2,7 +2,7 @@ use std::path::PathBuf;
 use std::sync::Arc;
 
 use chrono_english::parse_date_string;
-use clap::{Parser, Subcommand};
+use clap::{Parser, Subcommand, ValueEnum};
 use color_eyre::eyre::{eyre, Result};
 use futures::StreamExt;
 use inquire::{Password, Text};
@@ -10,9 +10,11 @@ use log::info;
 use serde::Deserialize;
 
 use crataegus::db::{Config as DbConfig, Db};
-use crataegus::export::{create_exporter, Format};
+use crataegus::export::{create_exporter, Format as ExportFormat};
+use crataegus::gpslogger::csv::read_csv;
 use crataegus::server::{Config as ServerConfig, Server};
 
+/// Command line arguments
 #[derive(Parser, Debug)]
 #[command(version, about)]
 struct Args {
@@ -31,6 +33,7 @@ pub struct Config {
     db: DbConfig,
 }
 
+/// Top level subcommands
 #[derive(Subcommand, Debug)]
 enum Cmd {
     /// Start the server
@@ -43,9 +46,9 @@ enum Cmd {
     Export {
         // all these values are required
         #[arg(value_enum)]
-        format: Format,
+        format: ExportFormat,
 
-        #[clap(value_hint = clap::ValueHint::FilePath, required = true)]
+        #[clap(value_hint = clap::ValueHint::FilePath)]
         path: PathBuf,
 
         username: String,
@@ -54,6 +57,25 @@ enum Cmd {
 
         stop_str: String,
     },
+    Import {
+        /// The format of the file to import
+        #[arg(value_enum)]
+        format: ImportFormat,
+
+        /// The path to the file to import
+        #[clap(value_hint = clap::ValueHint::FilePath)]
+        path: PathBuf,
+
+        /// The username to associate with the imported data
+        username: String,
+    },
+}
+
+/// Types of supported imports
+#[derive(Debug, Clone, Copy, ValueEnum)]
+enum ImportFormat {
+    /// GPSLogger CSV format
+    GpsLoggerCsv,
 }
 
 /// Implementation of the Config struct
@@ -126,7 +148,7 @@ async fn backup(config: Config) -> Result<()> {
 
 async fn export(
     config: Config,
-    format: Format,
+    format: ExportFormat,
     path: PathBuf,
     username: String,
     start_str: String,
@@ -157,7 +179,7 @@ async fn export(
     let mut exporter = create_exporter(format, &name, &path)
         .map_err(|e| eyre!("Failed to create exporter: {}", e))?;
     let mut location_stream = db
-        .location_get(&username, start.to_utc(), stop.to_utc())
+        .location_stream(&username, start.to_utc(), stop.to_utc())
         .await
         .map_err(|e| eyre!("Failed to get location stream: {}", e))?;
     let mut count = 0;
@@ -170,6 +192,40 @@ async fn export(
     }
     exporter.finish()?;
     println!("Exported {} locations", count);
+    Ok(())
+}
+
+async fn import(
+    config: Config,
+    format: ImportFormat,
+    path: PathBuf,
+    username: String,
+) -> Result<()> {
+    println!(
+        "Importing\n  format: {:?}\n  path: {}",
+        format,
+        path.display()
+    );
+    let db = Arc::new(
+        Db::new(config.db)
+            .await
+            .map_err(|e| eyre!("Failed to connect to database: {}", e))?,
+    );
+    let mut count = 0;
+    match format {
+        ImportFormat::GpsLoggerCsv => {
+            let iter =
+                read_csv(path, username).map_err(|e| eyre!("Failed to read CSV file: {}", e))?;
+            for location in iter {
+                let location = location.map_err(|e| eyre!("Failed to read location: {}", e))?;
+                db.location_insert(location)
+                    .await
+                    .map_err(|e| eyre!("Failed to insert location: {}", e))?;
+                count += 1;
+            }
+        }
+    }
+    println!("Imported {} locations", count);
     Ok(())
 }
 
@@ -195,6 +251,11 @@ async fn main() -> Result<()> {
             start_str,
             stop_str,
         } => export(config, format, path, username, start_str, stop_str).await?,
+        Cmd::Import {
+            format,
+            path,
+            username,
+        } => import(config, format, path, username).await?,
     }
 
     info!("Crataegus has stopped");

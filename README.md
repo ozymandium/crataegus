@@ -2,6 +2,7 @@ Crataegus
 ===
 ## To Do
 - CSV Import from GPSLogger
+- move some of the main.rs export code to the export module
 - network locations from GpsLogger will be in MSL
 - get rid of unwrap / graceful error handling
 - photo import

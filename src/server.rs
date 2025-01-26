@@ -110,7 +110,7 @@ impl Server {
     async fn handle_gpslogger(
         State(server): State<Arc<Server>>,
         Extension(AuthenticatedUser { username }): Extension<AuthenticatedUser>,
-        Query(payload): Query<gpslogger::UrlPayload>, // auto extracts query params
+        Query(payload): Query<gpslogger::http::Payload>, // auto extracts query params from url
     ) -> Response<Body> {
         debug!("gpslogger url payload: {:?}", payload);
         server
