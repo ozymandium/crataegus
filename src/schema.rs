@@ -6,7 +6,21 @@ pub use user::Model as User;
 
 /// Trait applied to all models to allow one-line validation.
 pub trait SanityCheck {
+    /// Perform a sanity check on the model.
+    /// # Returns
+    /// Result indicating success or failure.
     fn sanity_check(&self) -> Result<()>;
+}
+
+/// Trait to convert a something to a Location struct.
+pub trait LocationGen {
+    /// Create a Location struct.
+    /// # Arguments
+    /// * `self` - The struct to convert.
+    /// * `username` - The username to associate with the location.
+    /// # Return
+    /// A Location struct with the data from the struct.
+    fn to_location(&self, username: &String) -> Location;
 }
 
 pub mod user {

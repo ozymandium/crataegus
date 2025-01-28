@@ -15,8 +15,5 @@ pub struct EPSG4979 {
 }
 
 extern "C" {
-    pub fn epsg4979_from_epsg9705(
-        input: *const EPSG9705,
-        output: *mut EPSG4979,
-    ) -> c_int;
+    pub fn epsg4979_from_epsg9705(input: *const EPSG9705, output: *mut EPSG4979) -> c_int;
 }

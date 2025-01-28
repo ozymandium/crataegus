@@ -1,9 +1,9 @@
 //use nom_exif::*;
+use crate::schema::Location;
+use color_eyre::eyre::{eyre, Result};
+use log::{debug, info};
 use std::collections::VecDeque;
 use std::path::PathBuf;
-use log::{info, debug};
-use crate::schema::Location;
-use color_eyre::eyre::{Result, eyre};
 
 /// Iterator that recursively searches for Exif GPS data in the given directory.
 pub struct Finder {
@@ -49,21 +49,21 @@ fn get_location(path: &PathBuf) -> Option<Location> {
         Err(_) => {
             debug!("Error creating MediaSource from file: {}", path.display());
             return None;
-        },
+        }
     };
     if !ms.has_exif() {
         debug!("File does not have EXIF data: {}", path.display());
         return None;
     }
     let mut parser = nom_exif::MediaParser::new();
-    let iter: nom_exif::ExifIter = match  parser.parse(ms) {
+    let iter: nom_exif::ExifIter = match parser.parse(ms) {
         Ok(iter) => iter,
         //Err(_) => return None,
         Err(e) => {
             debug!("Error parsing EXIF data from file: {}", path.display());
             debug!("Error: {}", e);
             return None;
-        },
+        }
     };
     let gps_info: nom_exif::GPSInfo = match iter.parse_gps_info() {
         Ok(maybe_gps_info) => match maybe_gps_info {
@@ -75,7 +75,7 @@ fn get_location(path: &PathBuf) -> Option<Location> {
             debug!("Error parsing GPSInfo from file: {}", path.display());
             debug!("Error: {}", e);
             return None;
-        },
+        }
     };
     info!("Found GPSInfo in file: {}", path.display());
     match location_from_gps_info(&gps_info) {
@@ -83,14 +83,12 @@ fn get_location(path: &PathBuf) -> Option<Location> {
         Err(e) => {
             debug!("Error creating Location from GPSInfo: {}", e);
             None
-        },
+        }
     }
 }
 
 fn location_from_gps_info(gps_info: &nom_exif::GPSInfo) -> Result<Location> {
-    use crate::ffi::{
-        EPSG9705, EPSG4979, epsg4979_from_epsg9705,
-    };
+    use crate::ffi::{epsg4979_from_epsg9705, EPSG4979, EPSG9705};
     // first, get height in WGS84 instead of MSL
     let epsg9705 = EPSG9705 {
         lat: dd_from_latlng_ref(&gps_info.latitude, gps_info.latitude_ref)?, // should be same
@@ -120,7 +118,7 @@ fn location_from_gps_info(gps_info: &nom_exif::GPSInfo) -> Result<Location> {
     //    altitude: epsg4979.alt,
     //    accuracy: None,
     //    time_utc: gps_info.time,
-    //    time_local: 
+    //    time_local:
     //})
     Err(eyre!("Not implemented"))
 }
