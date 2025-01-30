@@ -25,6 +25,7 @@ pub struct Config {
 #[derive(Debug, Clone, Copy, ValueEnum)]
 pub enum ImportFormat {
     /// GPSLogger CSV format
+    #[clap(name = "gpslogger-csv")]
     GpsLoggerCsv,
     /// Directory of images with EXIF data
     ExifDir,
@@ -172,7 +173,7 @@ async fn import_gps_logger_csv(
 async fn import_exif_dir(db: Arc<Db>, path: PathBuf, username: String) -> Result<(usize, usize)> {
     use crate::exif::Finder;
     println!("Importing locations from directory: {}", path.display());
-    let finder = Finder::new(&path);
+    let finder = Finder::new(&path, &username);
     let mut added_count = 0;
     let mut skipped_count = 0;
     for location in finder {

@@ -16,21 +16,20 @@ toml = "0.8.19"
 sea-orm = { version = "1.1.4", features = ["sqlx-sqlite", "runtime-tokio-rustls", "macros", "with-chrono"] }
 axum-auth = { version = "0.8.1", features = ["auth-basic"] }
 inquire = "0.7.5"
-nom-exif = "2.3.0"
 futures = "0.3.31"
 chrono-english = "0.1.7"
 futures-util = "0.3.31"
 axum-server = { version = "0.7.1", features = ["tls-rustls"] }
 rustls = { version = "0.23.21", features = ["ring"] }
 csv = "1.3.1"
+rexif = "0.7.5"
+kamadak-exif = "0.6.1"
+tzf-rs = "0.4.9"
+chrono-tz = "0.10.1"
 
 [build-dependencies]
 cc = "1.2.10"
 pkg-config = "0.3.31"
-
-# https://docs.rs/color-eyre/latest/color_eyre/#improving-perf-on-debug-builds
-[profile.dev.package.backtrace]
-opt-level = 3
 
 [dev-dependencies]
 tempfile = "3.15.0"

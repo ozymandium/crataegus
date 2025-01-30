@@ -1,21 +1,28 @@
-//use nom_exif::*;
 use crate::schema::Location;
-use color_eyre::eyre::{eyre, Result};
+use chrono::{DateTime, FixedOffset, NaiveDate, NaiveDateTime, NaiveTime, Utc};
+use color_eyre::eyre::{eyre, Result, WrapErr};
+use exif::{Exif, In, Reader, Tag, Value};
 use log::{debug, info};
-use std::collections::VecDeque;
-use std::path::PathBuf;
+
+use std::{collections::VecDeque, fs::File, io::BufReader, path::PathBuf};
+
+use crate::ffi::{epsg4979_from_epsg9705, EPSG4979, EPSG9705};
 
 /// Iterator that recursively searches for Exif GPS data in the given directory.
 pub struct Finder {
     to_visit: VecDeque<PathBuf>,
+    username: String,
 }
 
 impl Finder {
     /// Create a new Finder that will search the given directory.
-    pub fn new(dir: &PathBuf) -> Self {
+    pub fn new(dir: &PathBuf, username: &String) -> Self {
         let mut to_visit = VecDeque::new();
         to_visit.push_back(dir.clone());
-        Finder { to_visit }
+        Finder {
+            to_visit,
+            username: username.clone(),
+        }
     }
 }
 
@@ -24,6 +31,7 @@ impl Iterator for Finder {
 
     fn next(&mut self) -> Option<Location> {
         while let Some(path) = self.to_visit.pop_front() {
+            debug!("Visiting: {}", path.display());
             if path.is_dir() {
                 let entries = path.read_dir().ok()?;
                 for entry in entries {
@@ -31,7 +39,7 @@ impl Iterator for Finder {
                     self.to_visit.push_back(entry.path());
                 }
             } else if path.is_file() {
-                match get_location(&path) {
+                match get_location(&path, &self.username) {
                     Some(location) => return Some(location),
                     None => continue,
                 }
@@ -41,93 +49,175 @@ impl Iterator for Finder {
     }
 }
 
-fn get_location(path: &PathBuf) -> Option<Location> {
+//let static tags = [
+//    Tag::GPSDateStamp,
+//    Tag::GPSTimeStamp,
+//    Tag::GPSLatitude,
+//    Tag::GPSLatitudeRef,
+//    Tag::GPSLongitude,
+//    Tag::GPSLongitudeRef,
+//    Tag::GPSAltitude,
+//    Tag::GPSAltitudeRef,
+//]
+
+/// Top level function to get a Location from an Exif file.
+/// # Arguments
+/// * `path` - The path to the file to read.
+/// * `username` - The username to associate with the location.
+/// # Return
+/// A Location struct with the data from the file, or None if there's any errors, such as the file
+/// not containing Exif data.
+fn get_location(path: &PathBuf, username: &String) -> Option<Location> {
     debug!("Getting location from file: {}", path.display());
-    // always return None if any error arises.
-    let ms = match nom_exif::MediaSource::file_path(&path.as_path()) {
-        Ok(ms) => ms,
-        Err(_) => {
-            debug!("Error creating MediaSource from file: {}", path.display());
-            return None;
+    let file = File::open(path).ok()?;
+    let exif = Reader::new()
+        .read_from_container(&mut BufReader::new(&file))
+        .ok()?;
+
+    let latitude: f64 = get_latitude(&exif)?;
+    let longitude: f64 = get_longitude(&exif)?;
+
+    let datetime_utc: DateTime<Utc> = get_datetime_utc(&exif)?;
+    let datetime_local: DateTime<FixedOffset> =
+        localtime_at(datetime_utc, latitude, longitude).ok()?;
+    debug!("datetime_local: {:?}", datetime_local);
+
+    let altitude: f64 = get_altitude(&exif)?;
+
+    None
+}
+
+/////////////////////////////////////////////////////////////
+// second-level functions to retrive fields from Exif data //
+/////////////////////////////////////////////////////////////
+
+fn get_latitude(exif: &Exif) -> Option<f64> {
+    if let Some(lat_val_field) = exif.get_field(Tag::GPSLatitude, In::PRIMARY) {
+        match &lat_val_field.value {
+            Value::Rational(lat_val_vec_rational) => {
+                if lat_val_vec_rational.len() != 3 {
+                    return None;
+                }
+                let mut lat_val_vec: Vec<f64> = vec![0.0; 3];
+                for (i, rational) in lat_val_vec_rational.iter().enumerate() {
+                    lat_val_vec[i] = rational.to_f64();
+                }
+                debug!("lat_val_vec: {:?}", lat_val_vec);
+                let lat_ref = exif.get_field(Tag::GPSLatitudeRef, In::PRIMARY)?;
+                let lat_dir = string_from_ascii(&lat_ref.value).ok()?;
+                debug!("lat_dir: {}", lat_dir);
+                let lat = dd_from_dms_ref(&lat_val_vec, lat_dir.chars().next()?).ok()?;
+                debug!("lat: {}", lat);
+                Some(lat)
+            }
+            _ => None,
         }
-    };
-    if !ms.has_exif() {
-        debug!("File does not have EXIF data: {}", path.display());
-        return None;
-    }
-    let mut parser = nom_exif::MediaParser::new();
-    let iter: nom_exif::ExifIter = match parser.parse(ms) {
-        Ok(iter) => iter,
-        //Err(_) => return None,
-        Err(e) => {
-            debug!("Error parsing EXIF data from file: {}", path.display());
-            debug!("Error: {}", e);
-            return None;
-        }
-    };
-    let gps_info: nom_exif::GPSInfo = match iter.parse_gps_info() {
-        Ok(maybe_gps_info) => match maybe_gps_info {
-            Some(gps_info) => gps_info,
-            None => return None,
-        },
-        //Err(_) => return None,
-        Err(e) => {
-            debug!("Error parsing GPSInfo from file: {}", path.display());
-            debug!("Error: {}", e);
-            return None;
-        }
-    };
-    info!("Found GPSInfo in file: {}", path.display());
-    match location_from_gps_info(&gps_info) {
-        Ok(location) => Some(location),
-        Err(e) => {
-            debug!("Error creating Location from GPSInfo: {}", e);
-            None
-        }
+    } else {
+        None
     }
 }
 
-fn location_from_gps_info(gps_info: &nom_exif::GPSInfo) -> Result<Location> {
-    use crate::ffi::{epsg4979_from_epsg9705, EPSG4979, EPSG9705};
-    // first, get height in WGS84 instead of MSL
-    let epsg9705 = EPSG9705 {
-        lat: dd_from_latlng_ref(&gps_info.latitude, gps_info.latitude_ref)?, // should be same
-        lon: dd_from_latlng_ref(&gps_info.longitude, gps_info.longitude_ref)?, // should be same
-        alt: gps_info.altitude.as_float() * f64::from(gps_info.altitude_ref), // msl
-    };
-    let mut epsg4979 = EPSG4979 {
-        lat: 0.0,
-        lon: 0.0,
-        alt: 0.0,
-    };
-    let status = unsafe { epsg4979_from_epsg9705(&epsg9705, &mut epsg4979) };
-    let alt = match status {
-        0 => epsg4979.alt,
-        -1 => return Err(eyre!("epsg4979_from_epsg9705: null pointer")),
-        -2 => return Err(eyre!("epsg4979_from_epsg9705: context creation")),
-        -3 => return Err(eyre!("epsg4979_from_epsg9705: transformation creation")),
-        -4 => return Err(eyre!("epsg4979_from_epsg9705: transformation failure")),
-        _ => return Err(eyre!("epsg4979_from_epsg9705: unknown error: {}", status)),
-    };
-    // now we need to look up local time from gps time.
-
-    //// now, we're finally done
-    //Ok(Location {
-    //    latitude: epsg4979.lat,
-    //    longitude: epsg4979.lon,
-    //    altitude: epsg4979.alt,
-    //    accuracy: None,
-    //    time_utc: gps_info.time,
-    //    time_local:
-    //})
-    Err(eyre!("Not implemented"))
+fn get_longitude(exif: &Exif) -> Option<f64> {
+    if let Some(lng_val_field) = exif.get_field(Tag::GPSLongitude, In::PRIMARY) {
+        match &lng_val_field.value {
+            Value::Rational(lng_val_vec_rational) => {
+                if lng_val_vec_rational.len() != 3 {
+                    return None;
+                }
+                let mut lng_val_vec: Vec<f64> = vec![0.0; 3];
+                for (i, rational) in lng_val_vec_rational.iter().enumerate() {
+                    lng_val_vec[i] = rational.to_f64();
+                }
+                debug!("lng_val_vec: {:?}", lng_val_vec);
+                let lng_ref = exif.get_field(Tag::GPSLongitudeRef, In::PRIMARY)?;
+                let lng_dir = string_from_ascii(&lng_ref.value).ok()?;
+                debug!("lng_dir: {}", lng_dir);
+                let lng = dd_from_dms_ref(&lng_val_vec, lng_dir.chars().next()?).ok()?;
+                debug!("lng: {}", lng);
+                Some(lng)
+            }
+            _ => None,
+        }
+    } else {
+        None
+    }
 }
+
+fn get_datetime_utc(exif: &Exif) -> Option<DateTime<Utc>> {
+    let naive_date = get_date(&exif)?;
+    debug!("naive_date: {:?}", naive_date);
+    let naive_time = get_time(&exif)?;
+    debug!("naive_time: {:?}", naive_time);
+    Some(NaiveDateTime::new(naive_date, naive_time).and_utc())
+}
+
+fn get_date(exif: &Exif) -> Option<NaiveDate> {
+    if let Some(date_field) = exif.get_field(Tag::GPSDateStamp, In::PRIMARY) {
+        debug!("date_field: {:?}", date_field);
+        let date_str = string_from_ascii(&date_field.value).ok()?;
+        debug!("date_str: {}", date_str);
+        NaiveDate::parse_from_str(&date_str, "%Y:%m:%d").ok()
+    } else {
+        None
+    }
+}
+
+fn get_time(exif: &Exif) -> Option<NaiveTime> {
+    if let Some(time_field) = exif.get_field(Tag::GPSTimeStamp, In::PRIMARY) {
+        match &time_field.value {
+            Value::Rational(vec_rational) => {
+                if vec_rational.len() != 3 {
+                    return None;
+                }
+                let mut time_vec: Vec<u32> = vec![0; 3];
+                for (i, rational) in vec_rational.iter().enumerate() {
+                    let float: f32 = rational.to_f32();
+                    if float.fract() != 0.0 {
+                        debug!("Non-integer rational in time field: {:?}", rational);
+                        return None;
+                    }
+                    time_vec[i] = float as u32;
+                }
+                debug!("time_vec: {:?}", time_vec);
+                Some(NaiveTime::from_hms(time_vec[0], time_vec[1], time_vec[2]))
+            }
+            _ => None,
+        }
+    } else {
+        None
+    }
+}
+
+/////////////////////////////////////
+// exif-rs compatibility functions //
+/////////////////////////////////////
+
+fn string_from_ascii(value: &Value) -> Result<String> {
+    match value {
+        Value::Ascii(vec_vec_u8) => {
+            let mut result = String::new();
+            for (i, vec_u8) in vec_vec_u8.iter().enumerate() {
+                let s = String::from_utf8(vec_u8.clone()).map_err(|e| eyre!("Utf8Error: {}", e))?;
+                if i > 0 {
+                    result.push('\n'); // Add a separator if needed
+                }
+                result.push_str(&s);
+            }
+            Ok(result)
+        }
+        _ => Err(eyre!("Expected Ascii, got {:?}", value)),
+    }
+}
+
+///////////////////////
+// Generic Utilities //
+///////////////////////
 
 /// Convert lat/lng and a direction character to decimal degrees.
-fn dd_from_latlng_ref(ll: &nom_exif::LatLng, ref_: char) -> Result<f64> {
-    let deg: f64 = ll.0.as_float();
-    let min: f64 = ll.1.as_float();
-    let sec: f64 = ll.2.as_float();
+fn dd_from_dms_ref(dms: &Vec<f64>, ref_: char) -> Result<f64> {
+    let deg: f64 = dms[0];
+    let min: f64 = dms[1];
+    let sec: f64 = dms[2];
 
     let dir_sign = match ref_ {
         'N' | 'E' => 1.0,
@@ -135,4 +225,24 @@ fn dd_from_latlng_ref(ll: &nom_exif::LatLng, ref_: char) -> Result<f64> {
         _ => return Err(eyre!("Invalid direction character: {}", ref_)),
     };
     Ok(dir_sign * (deg + min / 60.0 + sec / 3600.0))
+}
+
+static TZ_FINDER: std::sync::LazyLock<tzf_rs::DefaultFinder> =
+    std::sync::LazyLock::new(|| tzf_rs::DefaultFinder::new());
+
+fn localtime_at(utc: DateTime<Utc>, lat: f64, lng: f64) -> Result<DateTime<FixedOffset>> {
+    use chrono::{Offset, TimeZone};
+    use chrono_tz::{Tz, TzOffset};
+    use std::str::FromStr;
+
+    let tz_str: &str = TZ_FINDER.get_tz_name(lng, lat);
+    debug!("Timezone: {}", tz_str);
+    let tz = chrono_tz::Tz::from_str(tz_str)
+        .wrap_err(format!("Failed to parse timezone: {}", tz_str))?;
+    debug!("Timezone: {:?}", tz);
+    let offset: TzOffset = tz.offset_from_utc_datetime(&utc.naive_utc());
+    debug!("Offset: {:?}", offset);
+    let fixed_offset: FixedOffset = offset.fix();
+    debug!("FixedOffset: {:?}", fixed_offset);
+    Ok(utc.with_timezone(&fixed_offset))
 }
