@@ -4,8 +4,9 @@ use color_eyre::eyre::{eyre, Result, WrapErr};
 use exif::{Exif, In, Reader, Tag, Value};
 use log::{debug, info};
 
-use std::{collections::VecDeque, fs::File, io::BufReader, path::PathBuf};
+use crate::proj::Converter;
 
+use std::{collections::VecDeque, fs::File, io::BufReader, path::PathBuf};
 
 /// Iterator that recursively searches for Exif GPS data in the given directory.
 pub struct Finder {
@@ -81,9 +82,12 @@ fn get_location(path: &PathBuf, username: &String) -> Option<Location> {
         localtime_at(datetime_utc, latitude, longitude).ok()?;
     debug!("datetime_local: {:?}", datetime_local);
 
-    let altitude_msl: f64 = get_altitude_msl(&exif).wrap_err("Failed to get altitude").ok()?;
+    let altitude_msl: f64 = get_altitude_msl(&exif)
+        .wrap_err("Failed to get altitude")
+        .ok()?;
     debug!("altitude_msl: {}", altitude_msl);
-    let altitude_wgs84: f64 = get_altitude_wgs84(latitude, longitude, altitude_msl).ok()?;
+    let conv = Converter::new().ok()?;
+    let altitude_wgs84: f64 = conv.convert(latitude, longitude, altitude_msl).ok()?;
     debug!("altitude_wgs84: {}", altitude_wgs84);
 
     None
@@ -191,7 +195,9 @@ fn get_time(exif: &Exif) -> Option<NaiveTime> {
 }
 
 fn get_altitude_msl(exif: &Exif) -> Result<f64> {
-    let msl_val_field = exif.get_field(Tag::GPSAltitude, In::PRIMARY).ok_or_else(|| eyre!("Failed to get GPSAltitude"))?;
+    let msl_val_field = exif
+        .get_field(Tag::GPSAltitude, In::PRIMARY)
+        .ok_or_else(|| eyre!("Failed to get GPSAltitude"))?;
 
     let msl_vec_rational = match &msl_val_field.value {
         Value::Rational(vec_rational) => vec_rational,
@@ -204,27 +210,20 @@ fn get_altitude_msl(exif: &Exif) -> Result<f64> {
     let msl_val: f64 = msl_vec_rational[0].to_f64();
     debug!("msl_val: {}", msl_val);
 
-    let msl_ref = exif.get_field(Tag::GPSAltitudeRef, In::PRIMARY).ok_or_else(|| eyre!("Failed to get GPSAltitudeRef"))?;
-    let msl_dir: u32 = msl_ref.value.get_uint(0).ok_or_else(|| eyre!("Failed to get GPSAltitudeRef"))?;
+    let msl_ref = exif
+        .get_field(Tag::GPSAltitudeRef, In::PRIMARY)
+        .ok_or_else(|| eyre!("Failed to get GPSAltitudeRef"))?;
+    let msl_dir: u32 = msl_ref
+        .value
+        .get_uint(0)
+        .ok_or_else(|| eyre!("Failed to get GPSAltitudeRef"))?;
     debug!("msl_dir: {}", msl_dir);
     let sign = match msl_dir {
         0 => 1.0,
         1 => -1.0,
         _ => return Err(eyre!("Invalid MSL altitude direction: {}", msl_dir)),
     };
-    Ok(sign * msl_val)   
-}
-
-fn get_altitude_wgs84(lat: f64, lng: f64, msl: f64) -> Result<f64> {
-    use crate::ffi::{alt_wgs84_from_msl, EPSG4979, EPSG9705};
-
-    let input = EPSG9705 {
-        lat: lat,
-        lon: lng,
-        msl: msl,
-    };
-    let output: EPSG4979 = alt_wgs84_from_msl(&input).wrap_err(format!("Failed to convert MSL to WGS84. lat={}, lng={}, msl={}", lat, lng, msl))?;
-    Ok(output.alt)
+    Ok(sign * msl_val)
 }
 
 /////////////////////////////////////
@@ -285,6 +284,3 @@ fn localtime_at(utc: DateTime<Utc>, lat: f64, lng: f64) -> Result<DateTime<Fixed
     debug!("FixedOffset: {:?}", fixed_offset);
     Ok(utc.with_timezone(&fixed_offset))
 }
-
-
-
