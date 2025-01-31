@@ -26,6 +26,8 @@ rexif = "0.7.5"
 kamadak-exif = "0.6.1"
 tzf-rs = "0.4.9"
 chrono-tz = "0.10.1"
+# fork of proj crate with 3d support enabled
+proj = { git = "https://github.com/ozymandium/proj", branch = "main", version = "0.28.0", features = ["bundled_proj", "network", "pkg_config", "ureq"] }
 
 [build-dependencies]
 cc = "1.2.10"

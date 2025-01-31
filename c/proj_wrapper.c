@@ -9,7 +9,7 @@ typedef struct {
     /// Longitude in degrees
     double lon;  
     /// Altitude above MSL in meters
-    double alt;  
+    double msl;
 } EPSG9705;
 
 /// \brief LLA coordinates in EPSG:4979 (WGS84 3D)
@@ -48,7 +48,7 @@ int epsg4979_from_epsg9705(const EPSG9705 *input, EPSG4979 *output) {
     double lon_rad = input->lon * M_PI / 180.0;
 
     // Input coordinates
-    PJ_COORD c_in = proj_coord(lon_rad, lat_rad, input->alt, 0);
+    PJ_COORD c_in = proj_coord(lon_rad, lat_rad, input->msl, 0);
 
     // Perform transformation
     PJ_COORD c_out = proj_trans(P, PJ_FWD, c_in);
