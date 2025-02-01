@@ -38,7 +38,7 @@ impl Db {
     /// * `config` - The configuration for the database
     /// # Returns
     /// The database struct
-    pub async fn new(config: Config) -> Result<Self> {
+    pub async fn new(config: &Config) -> Result<Self> {
         // connecting with `c` option will create the file if it doesn't exist
         let url = format!("sqlite://{}?mode=rwc", config.path.display());
         let mut options = ConnectOptions::new(url);
@@ -66,7 +66,10 @@ impl Db {
         )
         .await
         .wrap_err("Failed to create the locations table")?;
-        Ok(Db { config, conn })
+        Ok(Db {
+            config: config.clone(),
+            conn: conn,
+        })
     }
 
     //////////////////////
@@ -321,7 +324,7 @@ mod tests {
         let db_file = NamedTempFile::new().unwrap();
         // having a file that exists ensures that the schema existence is checked when determining
         // whether to create the tables
-        let db = Db::new(Config {
+        let db = Db::new(&Config {
             path: db_file.path().to_path_buf(),
             backups: 1,
         })
@@ -378,7 +381,7 @@ mod tests {
     #[tokio::test]
     async fn test_user_table() {
         let db_file = NamedTempFile::new().unwrap();
-        let db = Db::new(Config {
+        let db = Db::new(&Config {
             path: db_file.path().to_path_buf(),
             backups: 1,
         })
@@ -411,7 +414,7 @@ mod tests {
     #[tokio::test]
     async fn test_username_foreign_key_relation() {
         let db_file = NamedTempFile::new().unwrap();
-        let db = Db::new(Config {
+        let db = Db::new(&Config {
             path: db_file.path().to_path_buf(),
             backups: 1,
         })
@@ -449,7 +452,7 @@ mod tests {
     #[tokio::test]
     async fn test_is_backup() {
         let db_file = NamedTempFile::new().unwrap();
-        let db = Db::new(Config {
+        let db = Db::new(&Config {
             path: db_file.path().to_path_buf(),
             backups: 3,
         })
@@ -493,7 +496,7 @@ mod tests {
     async fn test_location_get() {
         use futures::StreamExt;
         let db_file = NamedTempFile::new().unwrap();
-        let db = Db::new(Config {
+        let db = Db::new(&Config {
             path: db_file.path().to_path_buf(),
             backups: 1,
         })

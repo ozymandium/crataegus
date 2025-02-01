@@ -52,7 +52,7 @@ impl Config {
 pub async fn serve(config: Config) -> Result<()> {
     info!("Starting Crataegus server");
     let db = Arc::new(
-        Db::new(config.db)
+        Db::new(&config.db)
             .await
             .map_err(|e| eyre!("Failed to connect to database: {}", e))?,
     );
@@ -68,7 +68,7 @@ pub async fn serve(config: Config) -> Result<()> {
 pub async fn useradd(config: Config) -> Result<()> {
     println!("Adding a user to the database");
     let db = Arc::new(
-        Db::new(config.db)
+        Db::new(&config.db)
             .await
             .map_err(|e| eyre!("Failed to connect to database: {}", e))?,
     );
@@ -85,7 +85,7 @@ pub async fn useradd(config: Config) -> Result<()> {
 pub async fn backup(config: Config) -> Result<()> {
     println!("Backing up the database");
     let db = Arc::new(
-        Db::new(config.db)
+        Db::new(&config.db)
             .await
             .map_err(|e| eyre!("Failed to connect to database: {}", e))?,
     );
@@ -117,7 +117,7 @@ pub async fn export(
         stop
     );
     let db = Arc::new(
-        Db::new(config.db)
+        Db::new(&config.db)
             .await
             .map_err(|e| eyre!("Failed to connect to database: {}", e))?,
     );
@@ -179,7 +179,7 @@ pub async fn import(
         path.display()
     );
     let db = Arc::new(
-        Db::new(config.db)
+        Db::new(&config.db)
             .await
             .map_err(|e| eyre!("Failed to connect to database: {}", e))?,
     );
@@ -225,7 +225,7 @@ mod tests {
             path: db_path,
             backups: 0,
         };
-        let db = Arc::new(Db::new(db_config).await.unwrap());
+        let db = Arc::new(Db::new(&db_config).await.unwrap());
         db.user_insert(&USERNAME.to_string(), &"password".to_string())
             .await
             .unwrap();
