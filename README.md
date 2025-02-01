@@ -25,6 +25,7 @@ Crataegus is built to ingest history from [GPSLogger](https://gpslogger.app), wh
 - REST API: WIP
 
 ## To Do (for now)
+- add an info command
 - Documentation
 - network locations from GpsLogger will be in MSL
 - get rid of unwrap / graceful error handling
