@@ -122,6 +122,12 @@ impl Db {
         Ok(())
     }
 
+    /// Check if the path is a backup file. Backup files are named as `db.sqlite.<ts>.bak`, where
+    /// `<ts>` is the current timestamp.
+    /// # Arguments
+    /// * `path_buf` - The path to check
+    /// # Returns
+    /// `true` if the path is a backup file, `false` otherwise
     fn is_backup(&self, path_buf: &PathBuf) -> bool {
         let path = path_buf.to_str().unwrap();
         if !path.starts_with(&self.config.path.to_str().unwrap()) {
