@@ -45,5 +45,12 @@ Crataegus is built to ingest history from [GPSLogger](https://gpslogger.app), wh
     - input sanitization
 - unit testing
     - server
-    - gpx export
 
+## Install
+
+This library depends on the PROJ library, since the Rust crate `proj` only supports 2D conversions.
+EXIF data stores height in MSL (sea level), whereas the database stores height above the WGS84 
+ellipsoid for simplicity. The PROJ library is used to convert between the two.
+```sh
+sudo dnf install proj-devel
+```

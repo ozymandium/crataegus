@@ -21,9 +21,9 @@ struct Args {
 /// Top level subcommands
 #[derive(Subcommand, Debug)]
 enum Cmd {
-    /// Start the server
+    /// Start the HTTP server.
     Serve,
-    /// Add a user to the database
+    /// Add a user to the database.
     Useradd,
     /// Backup the database. May be called while server is running.
     Backup,

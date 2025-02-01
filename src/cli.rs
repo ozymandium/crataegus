@@ -25,7 +25,10 @@ pub struct Config {
 #[derive(Debug, Clone, Copy, ValueEnum)]
 pub enum ImportFormat {
     /// GPSLogger CSV format
+    #[clap(name = "gpslogger-csv")]
     GpsLoggerCsv,
+    /// Directory of images with EXIF data
+    ExifDir,
 }
 
 /// Implementation of the Config struct
@@ -167,6 +170,25 @@ async fn import_gps_logger_csv(
     Ok((added_count, skipped_count))
 }
 
+async fn import_exif_dir(db: Arc<Db>, path: PathBuf, username: String) -> Result<(usize, usize)> {
+    use crate::exif::Finder;
+    println!("Importing locations from directory: {}", path.display());
+    let finder = Finder::new(&path, &username);
+    let mut added_count = 0;
+    let mut skipped_count = 0;
+    for location in finder {
+        match db
+            .location_insert(location)
+            .await
+            .map_err(|e| eyre!("Failed to insert location: {}", e))?
+        {
+            true => added_count += 1,
+            false => skipped_count += 1,
+        }
+    }
+    Ok((added_count, skipped_count))
+}
+
 pub async fn import(
     config: Config,
     format: ImportFormat,
@@ -187,6 +209,9 @@ pub async fn import(
         ImportFormat::GpsLoggerCsv => import_gps_logger_csv(db, path, username)
             .await
             .map_err(|e| eyre!("Failed to import GPSLogger CSV: {}", e))?,
+        ImportFormat::ExifDir => import_exif_dir(db, path, username)
+            .await
+            .map_err(|e| eyre!("Failed to import Exif directory: {}", e))?,
     };
     println!(
         "Found {} locations. Added {}, skipped {}",
