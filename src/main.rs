@@ -1,7 +1,9 @@
+use std::io::Write;
 use std::path::PathBuf;
 
 use clap::{Parser, Subcommand};
 use color_eyre::eyre::Result;
+use env_logger::{Builder as LogBuilder, Env as LogEnv};
 
 use crataegus::cli::{backup, export, import, serve, useradd, Config, ImportFormat};
 use crataegus::export::Format as ExportFormat;
@@ -56,10 +58,31 @@ enum Cmd {
     },
 }
 
+/// Configure the logging system with env_logger. Call this function at the beginning of main.
+/// Disables timestamping, since systemd will add timestamps to the logs.
+fn setup_logging() {
+    // allows setting the RUST_LOG environment variable to control logging
+    LogBuilder::from_env(LogEnv::default())
+        .format(|buf, record| {
+            let module_path = record.module_path().unwrap_or_default();
+            let line = record.line().unwrap_or_default();
+            let level_style = buf.default_level_style(record.level());
+            writeln!(
+                buf,
+                "{level_style}[{}] {}:{}\n{}{level_style:#}",
+                record.level(),
+                module_path,
+                line,
+                record.args()
+            )
+        })
+        .init();
+}
+
 #[tokio::main]
 async fn main() -> Result<()> {
-    color_eyre::install().unwrap();
-    env_logger::init();
+    color_eyre::install()?;
+    setup_logging();
 
     let args = Args::parse();
     println!("{:#?}", args);
