@@ -91,7 +91,16 @@ impl Server {
         next: Next,
     ) -> Response<Body> {
         debug!("Authenticating user: {}", username);
-        let password = password.unwrap_or_default(); // avoid potential lifetime issues
+        let password = match password {
+            Some(p) => p,
+            None => {
+                warn!("No password provided for user: {}", username);
+                return Response::builder()
+                    .status(401)
+                    .body(Body::from("No password provided"))
+                    .unwrap();
+            }
+        };
         let good = server.db.user_check(&username, &password).await.unwrap();
         if !good {
             warn!("Failed to authenticate user: {}", username);
