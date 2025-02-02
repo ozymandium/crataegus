@@ -27,7 +27,7 @@ use color_eyre::eyre::Result;
 use std::{
     fs::File,
     io::{BufWriter, Write},
-    path::PathBuf,
+    path::Path,
 };
 
 /// Writes a GPX file piecewise. XML is written in chunks to avoid having to keep the entire file
@@ -45,7 +45,7 @@ impl GpxExporter {
     /// * `path`: The path to the file to write
     /// # Returns
     /// The exporter
-    pub fn new(name: &str, path: &PathBuf) -> Result<Self> {
+    pub fn new(name: &str, path: &Path) -> Result<Self> {
         let file = File::create(path)?;
         let mut writer = BufWriter::new(file);
         let header = HEADER_FMT.replace("{track_name}", name);

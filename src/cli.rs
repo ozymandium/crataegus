@@ -1,4 +1,4 @@
-use std::path::PathBuf;
+use std::path::Path;
 use std::sync::Arc;
 
 use chrono_english::parse_date_string;
@@ -37,7 +37,7 @@ impl Config {
     ///
     /// # Returns
     /// The configuration struct
-    pub fn load(path: &PathBuf) -> Result<Config> {
+    pub fn load(path: &Path) -> Result<Config> {
         if !path.exists() {
             return Err(eyre!("Config file does not exist: {}", path.display()));
         }
@@ -99,7 +99,7 @@ pub async fn backup(config: Config) -> Result<()> {
 pub async fn export(
     config: Config,
     format: ExportFormat,
-    path: PathBuf,
+    path: &Path,
     username: &str,
     start_str: &str,
     stop_str: &str,
@@ -126,7 +126,7 @@ pub async fn export(
         start.to_rfc3339(),
         stop.to_rfc3339()
     );
-    let mut exporter = create_exporter(format, &name, &path)
+    let mut exporter = create_exporter(format, &name, path)
         .map_err(|e| eyre!("Failed to create exporter: {}", e))?;
     let mut location_stream = db
         .location_stream(username, start.to_utc(), stop.to_utc())
@@ -145,11 +145,7 @@ pub async fn export(
     Ok(())
 }
 
-async fn import_gps_logger_csv(
-    db: Arc<Db>,
-    path: PathBuf,
-    username: &str,
-) -> Result<(usize, usize)> {
+async fn import_gps_logger_csv(db: Arc<Db>, path: &Path, username: &str) -> Result<(usize, usize)> {
     let mut added_count = 0;
     let mut skipped_count = 0;
     let iter = read_csv(path, username).map_err(|e| eyre!("Failed to read CSV file: {}", e))?;
@@ -170,7 +166,7 @@ async fn import_gps_logger_csv(
 pub async fn import(
     config: Config,
     format: ImportFormat,
-    path: PathBuf,
+    path: &Path,
     username: &str,
 ) -> Result<()> {
     println!(
@@ -246,7 +242,7 @@ mod tests {
         };
         db.location_insert(loc3.clone()).await.unwrap();
         // now import the CSV
-        let (added_count, skipped_count) = import_gps_logger_csv(db.clone(), csv_path, USERNAME)
+        let (added_count, skipped_count) = import_gps_logger_csv(db.clone(), &csv_path, USERNAME)
             .await
             .unwrap();
         assert_eq!(added_count, 5);
