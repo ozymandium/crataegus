@@ -75,7 +75,7 @@ pub async fn useradd(config: Config) -> Result<()> {
     println!("Connected to the database. Enter the user information:");
     let username = Text::new("Username").prompt()?;
     let password = Password::new("Password").prompt()?;
-    db.user_insert(&username, &password)
+    db.user_insert(username, password)
         .await
         .map_err(|e| eyre!("Failed to add user: {}", e))?;
     println!("User added successfully");
@@ -226,7 +226,7 @@ mod tests {
             backups: 0,
         };
         let db = Arc::new(Db::new(&db_config).await.unwrap());
-        db.user_insert(&USERNAME.to_string(), &"password".to_string())
+        db.user_insert(USERNAME.to_string(), "password".to_string())
             .await
             .unwrap();
         // insert the 3rd location to test that the import skips it and metrics are correct

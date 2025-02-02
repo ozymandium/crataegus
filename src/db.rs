@@ -182,10 +182,10 @@ impl Db {
     /// * `password` - The password to insert
     /// # Returns
     /// `Ok(())` if the user was successfully inserted, an error otherwise
-    pub async fn user_insert(&self, username: &String, password: &String) -> Result<()> {
+    pub async fn user_insert(&self, username: String, password: String) -> Result<()> {
         let user = user::Model {
-            username: username.clone(),
-            password: password.clone(),
+            username: username,
+            password: password,
         };
         let active_user = user.into_active_model();
         active_user
@@ -344,7 +344,7 @@ mod tests {
         .unwrap();
         assert_eq!(db.location_count().await, 0);
         // add user to the database
-        db.user_insert(&"test".to_string(), &"pass".to_string())
+        db.user_insert("test".to_string(), "pass".to_string())
             .await
             .unwrap();
         let username = "test".to_string();
@@ -405,7 +405,7 @@ mod tests {
                 .unwrap(),
             false
         );
-        db.user_insert(&"user".to_string(), &"pass".to_string())
+        db.user_insert("user".to_string(), "pass".to_string())
             .await
             .unwrap();
         assert_eq!(
@@ -451,7 +451,7 @@ mod tests {
         // insert the location should fail since no user exists
         assert!(db.location_insert(loc.clone()).await.is_err());
         // insert the user
-        db.user_insert(&valid_username, &"pass".to_string())
+        db.user_insert(valid_username, "pass".to_string())
             .await
             .unwrap();
         // insert the location should succeed now
@@ -514,10 +514,10 @@ mod tests {
         })
         .await
         .unwrap();
-        db.user_insert(&"user1".to_string(), &"pass".to_string())
+        db.user_insert("user1".to_string(), "pass".to_string())
             .await
             .unwrap();
-        db.user_insert(&"user2".to_string(), &"pass".to_string())
+        db.user_insert("user2".to_string(), "pass".to_string())
             .await
             .unwrap();
         let times = vec![
