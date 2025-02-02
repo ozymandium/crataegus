@@ -105,9 +105,9 @@ pub async fn export(
     stop_str: &str,
 ) -> Result<()> {
     let now = chrono::offset::Local::now().fixed_offset();
-    let start = parse_date_string(&start_str, now, chrono_english::Dialect::Us)
+    let start = parse_date_string(start_str, now, chrono_english::Dialect::Us)
         .map_err(|_| eyre!("Failed to parse start date"))?;
-    let stop = parse_date_string(&stop_str, now, chrono_english::Dialect::Us)
+    let stop = parse_date_string(stop_str, now, chrono_english::Dialect::Us)
         .map_err(|_| eyre!("Failed to parse stop date"))?;
     println!(
         "Exporting\n  format: {:?}\n  path: {}\n  start: {}\n  stop: {}",
@@ -129,7 +129,7 @@ pub async fn export(
     let mut exporter = create_exporter(format, &name, &path)
         .map_err(|e| eyre!("Failed to create exporter: {}", e))?;
     let mut location_stream = db
-        .location_stream(&username, start.to_utc(), stop.to_utc())
+        .location_stream(username, start.to_utc(), stop.to_utc())
         .await
         .map_err(|e| eyre!("Failed to get location stream: {}", e))?;
     let mut count = 0;
@@ -246,10 +246,9 @@ mod tests {
         };
         db.location_insert(loc3.clone()).await.unwrap();
         // now import the CSV
-        let (added_count, skipped_count) =
-            import_gps_logger_csv(db.clone(), csv_path, USERNAME)
-                .await
-                .unwrap();
+        let (added_count, skipped_count) = import_gps_logger_csv(db.clone(), csv_path, USERNAME)
+            .await
+            .unwrap();
         assert_eq!(added_count, 5);
         assert_eq!(skipped_count, 1);
         let locs = db
