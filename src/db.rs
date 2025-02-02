@@ -202,7 +202,7 @@ impl Db {
     /// * `password` - The password to check
     /// # Returns
     /// `Ok(true)` if the user exists and the password matches, `Ok(false)` if the user does not
-    pub async fn user_check(&self, username: &String, password: &String) -> Result<bool> {
+    pub async fn user_check(&self, username: &str, password: &str) -> Result<bool> {
         let user = user::Entity::find()
             .filter(user::Column::Username.eq(username))
             .one(&self.conn)
