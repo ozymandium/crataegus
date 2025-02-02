@@ -232,8 +232,7 @@ mod tests {
                 .unwrap()
                 .into(),
             time_local: chrono::DateTime::parse_from_rfc3339("2025-01-24T00:30:20.375-07:00")
-                .unwrap()
-                .into(),
+                .unwrap(),
             latitude: 24.241090416908264,
             longitude: -11.84478521347046,
             altitude: 1355.0,
@@ -249,7 +248,7 @@ mod tests {
         assert_eq!(skipped_count, 1);
         let locs = db
             .location_vec(
-                &USERNAME.to_string(),
+                USERNAME,
                 chrono::DateTime::parse_from_rfc3339("2025-01-24T07:02:29.167Z")
                     .unwrap()
                     .into(),

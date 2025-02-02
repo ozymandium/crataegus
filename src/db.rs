@@ -287,7 +287,7 @@ impl Db {
     #[cfg(test)]
     pub(crate) async fn location_vec(
         &self,
-        username: &String,
+        username: &str,
         start: DateTime<Utc>,
         stop: DateTime<Utc>,
     ) -> Result<Vec<Location>> {
@@ -351,8 +351,8 @@ mod tests {
         let time_local = time_utc.with_timezone(&chrono::FixedOffset::west_opt(3600).unwrap());
         let loc = Location {
             username: username.clone(),
-            time_utc: time_utc.clone(),
-            time_local: time_local.clone(),
+            time_utc,
+            time_local,
             latitude: 0.0,
             longitude: 0.0,
             altitude: 0.0,
@@ -370,9 +370,9 @@ mod tests {
         db.location_insert(loc2.clone()).await.unwrap();
         assert_eq!(db.location_count().await, 2); // successfully added the second entry
         let loc3 = Location {
-            username: username.clone(),
-            time_utc: time_utc.clone(),
-            time_local: time_local.clone(),
+            username,
+            time_utc,
+            time_local,
             latitude: 1.0,
             longitude: 1.0,
             altitude: 1.0,
@@ -396,27 +396,12 @@ mod tests {
         })
         .await
         .unwrap();
-        assert_eq!(
-            db.user_check(&"user".to_string(), &"pass".to_string())
-                .await
-                .unwrap(),
-            false
-        );
+        assert_eq!(db.user_check("user", "pass").await.unwrap(), false);
         db.user_insert("user".to_string(), "pass".to_string())
             .await
             .unwrap();
-        assert_eq!(
-            db.user_check(&"user".to_string(), &"pass".to_string())
-                .await
-                .unwrap(),
-            true
-        );
-        assert_eq!(
-            db.user_check(&"user".to_string(), &"wrong".to_string())
-                .await
-                .unwrap(),
-            false
-        );
+        assert_eq!(db.user_check("user", "pass").await.unwrap(), true);
+        assert_eq!(db.user_check("user", "wrong").await.unwrap(), false);
     }
 
     // creates an ephemeral database and checks the username relation
@@ -517,7 +502,7 @@ mod tests {
         db.user_insert("user2".to_string(), "pass".to_string())
             .await
             .unwrap();
-        let times = vec![
+        let times = [
             DateTime::parse_from_rfc3339("2024-12-31T00:00:00.000Z")
                 .unwrap()
                 .with_timezone(&Utc),
@@ -598,9 +583,9 @@ mod tests {
         // first just do an easy one with a bound that includes all the locations and check that
         // the user filter works
         {
-            let expected_idxs = vec![0, 2, 4];
+            let expected_idxs = [0, 2, 4];
             let mut stream = db
-                .location_stream(&"user1".to_string(), times[0], times[6])
+                .location_stream("user1", times[0], times[6])
                 .await
                 .unwrap();
             let mut count = 0;
@@ -613,9 +598,9 @@ mod tests {
             assert_eq!(count, expected_idxs.len());
         }
         {
-            let expected_idxs = vec![1, 3];
+            let expected_idxs = [1, 3];
             let mut stream = db
-                .location_stream(&"user2".to_string(), times[0], times[6])
+                .location_stream("user2", times[0], times[6])
                 .await
                 .unwrap();
             let mut count = 0;
@@ -631,7 +616,7 @@ mod tests {
         {
             let expected_idx = 1;
             let mut stream = db
-                .location_stream(&"user2".to_string(), times[1], times[3])
+                .location_stream("user2", times[1], times[3])
                 .await
                 .unwrap();
             let loc = stream.next().await.unwrap().unwrap();
