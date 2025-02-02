@@ -274,7 +274,7 @@ impl Db {
     /// Locations that fall within the specified time range, in ascending order of time.
     pub async fn location_stream(
         &self,
-        username: &String,
+        username: &str,
         start: DateTime<Utc>,
         stop: DateTime<Utc>,
     ) -> Result<impl Stream<Item = Result<Location, DbErr>> + use<'_>, DbErr> {
