@@ -9,7 +9,7 @@ use sea_orm::{
 };
 use serde::Deserialize;
 
-use std::{iter::Iterator, path::PathBuf};
+use std::{iter::Iterator, path::{PathBuf, Path}};
 
 use crate::schema::{location, user, Location, SanityCheck};
 
@@ -85,7 +85,7 @@ impl Db {
     ///     - Parent must not be root.
     /// # Returns
     /// `Ok(())` if the backup was successfully created, an error otherwise
-    async fn backup_to(&self, path: &PathBuf) -> Result<()> {
+    async fn backup_to(&self, path: &Path) -> Result<()> {
         // check that the path is absolute
         if !path.is_absolute() {
             return Err(eyre!("Backup path must be an absolute path: {:?}", path));
