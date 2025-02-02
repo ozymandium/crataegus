@@ -148,7 +148,8 @@ impl LocationGen for Payload {
 /// * `username` - The username to associate with the locations.
 /// # Return
 /// An iterator of `Location` structs.
-pub fn read_csv(path: PathBuf, username: String) -> Result<impl Iterator<Item = Result<Location>>> {
+pub fn read_csv(path: PathBuf, username: &str) -> Result<impl Iterator<Item = Result<Location>>> {
+    let username = username.to_string();
     let file = File::open(path).map_err(|e| eyre!("Failed to open CSV file: {}", e))?;
     let reader = csv::Reader::from_reader(file);
     let iter = reader
@@ -191,8 +192,7 @@ mod tests {
     async fn test_read_csv() {
         let file = create_csv();
         let path = file.path().to_path_buf();
-        let username = USERNAME.to_string();
-        let iter = read_csv(path, username).unwrap();
+        let iter = read_csv(path, USERNAME).unwrap();
         let locations: Vec<Result<Location>> = iter.collect();
         assert_eq!(locations.len(), 6);
 

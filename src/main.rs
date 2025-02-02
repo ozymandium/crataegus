@@ -100,12 +100,12 @@ async fn main() -> Result<()> {
             username,
             start_str,
             stop_str,
-        } => export(config, format, path, username, start_str, stop_str).await?,
+        } => export(config, format, path, &username, &start_str, &stop_str).await?,
         Cmd::Import {
             format,
             path,
             username,
-        } => import(config, format, path, username).await?,
+        } => import(config, format, path, &username).await?,
     }
 
     Ok(())

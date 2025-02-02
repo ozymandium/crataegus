@@ -100,9 +100,9 @@ pub async fn export(
     config: Config,
     format: ExportFormat,
     path: PathBuf,
-    username: String,
-    start_str: String,
-    stop_str: String,
+    username: &str,
+    start_str: &str,
+    stop_str: &str,
 ) -> Result<()> {
     let now = chrono::offset::Local::now().fixed_offset();
     let start = parse_date_string(&start_str, now, chrono_english::Dialect::Us)
@@ -148,7 +148,7 @@ pub async fn export(
 async fn import_gps_logger_csv(
     db: Arc<Db>,
     path: PathBuf,
-    username: String,
+    username: &str,
 ) -> Result<(usize, usize)> {
     let mut added_count = 0;
     let mut skipped_count = 0;
@@ -171,7 +171,7 @@ pub async fn import(
     config: Config,
     format: ImportFormat,
     path: PathBuf,
-    username: String,
+    username: &str,
 ) -> Result<()> {
     println!(
         "Importing\n  format: {:?}\n  path: {}",
@@ -247,7 +247,7 @@ mod tests {
         db.location_insert(loc3.clone()).await.unwrap();
         // now import the CSV
         let (added_count, skipped_count) =
-            import_gps_logger_csv(db.clone(), csv_path, USERNAME.to_string())
+            import_gps_logger_csv(db.clone(), csv_path, USERNAME)
                 .await
                 .unwrap();
         assert_eq!(added_count, 5);
