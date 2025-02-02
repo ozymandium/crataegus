@@ -9,7 +9,10 @@ use sea_orm::{
 };
 use serde::Deserialize;
 
-use std::{iter::Iterator, path::{PathBuf, Path}};
+use std::{
+    iter::Iterator,
+    path::{Path, PathBuf},
+};
 
 use crate::schema::{location, user, Location, SanityCheck};
 
@@ -125,11 +128,11 @@ impl Db {
     /// Check if the path is a backup file. Backup files are named as `db.sqlite.<ts>.bak`, where
     /// `<ts>` is the current timestamp.
     /// # Arguments
-    /// * `path_buf` - The path to check
+    /// * `path` - The path to check
     /// # Returns
     /// `true` if the path is a backup file, `false` otherwise
-    fn is_backup(&self, path_buf: &PathBuf) -> bool {
-        let path = path_buf.to_str().unwrap();
+    fn is_backup(&self, path: &Path) -> bool {
+        let path = path.to_str().unwrap();
         if !path.starts_with(&self.config.path.to_str().unwrap()) {
             return false;
         }
@@ -209,7 +212,7 @@ impl Db {
             Some(user) => {
                 user.sanity_check()?;
                 Ok(user.password == *password)
-            },
+            }
             None => Ok(false),
         }
     }

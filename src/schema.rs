@@ -1,4 +1,4 @@
-use color_eyre::eyre::{Result, ensure};
+use color_eyre::eyre::{ensure, Result};
 
 pub use location::Model as Location;
 pub use location::Source;
