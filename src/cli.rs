@@ -1,4 +1,4 @@
-use std::path::PathBuf;
+use std::path::Path;
 use std::sync::Arc;
 
 use chrono_english::parse_date_string;
@@ -37,7 +37,7 @@ impl Config {
     ///
     /// # Returns
     /// The configuration struct
-    pub fn load(path: &PathBuf) -> Result<Config> {
+    pub fn load(path: &Path) -> Result<Config> {
         if !path.exists() {
             return Err(eyre!("Config file does not exist: {}", path.display()));
         }
@@ -52,7 +52,7 @@ impl Config {
 pub async fn serve(config: Config) -> Result<()> {
     info!("Starting Crataegus server");
     let db = Arc::new(
-        Db::new(config.db)
+        Db::new(&config.db)
             .await
             .map_err(|e| eyre!("Failed to connect to database: {}", e))?,
     );
@@ -68,14 +68,14 @@ pub async fn serve(config: Config) -> Result<()> {
 pub async fn useradd(config: Config) -> Result<()> {
     println!("Adding a user to the database");
     let db = Arc::new(
-        Db::new(config.db)
+        Db::new(&config.db)
             .await
             .map_err(|e| eyre!("Failed to connect to database: {}", e))?,
     );
     println!("Connected to the database. Enter the user information:");
     let username = Text::new("Username").prompt()?;
     let password = Password::new("Password").prompt()?;
-    db.user_insert(&username, &password)
+    db.user_insert(username, password)
         .await
         .map_err(|e| eyre!("Failed to add user: {}", e))?;
     println!("User added successfully");
@@ -85,7 +85,7 @@ pub async fn useradd(config: Config) -> Result<()> {
 pub async fn backup(config: Config) -> Result<()> {
     println!("Backing up the database");
     let db = Arc::new(
-        Db::new(config.db)
+        Db::new(&config.db)
             .await
             .map_err(|e| eyre!("Failed to connect to database: {}", e))?,
     );
@@ -99,15 +99,15 @@ pub async fn backup(config: Config) -> Result<()> {
 pub async fn export(
     config: Config,
     format: ExportFormat,
-    path: PathBuf,
-    username: String,
-    start_str: String,
-    stop_str: String,
+    path: &Path,
+    username: &str,
+    start_str: &str,
+    stop_str: &str,
 ) -> Result<()> {
     let now = chrono::offset::Local::now().fixed_offset();
-    let start = parse_date_string(&start_str, now, chrono_english::Dialect::Us)
+    let start = parse_date_string(start_str, now, chrono_english::Dialect::Us)
         .map_err(|_| eyre!("Failed to parse start date"))?;
-    let stop = parse_date_string(&stop_str, now, chrono_english::Dialect::Us)
+    let stop = parse_date_string(stop_str, now, chrono_english::Dialect::Us)
         .map_err(|_| eyre!("Failed to parse stop date"))?;
     println!(
         "Exporting\n  format: {:?}\n  path: {}\n  start: {}\n  stop: {}",
@@ -117,7 +117,7 @@ pub async fn export(
         stop
     );
     let db = Arc::new(
-        Db::new(config.db)
+        Db::new(&config.db)
             .await
             .map_err(|e| eyre!("Failed to connect to database: {}", e))?,
     );
@@ -126,10 +126,10 @@ pub async fn export(
         start.to_rfc3339(),
         stop.to_rfc3339()
     );
-    let mut exporter = create_exporter(format, &name, &path)
+    let mut exporter = create_exporter(format, &name, path)
         .map_err(|e| eyre!("Failed to create exporter: {}", e))?;
     let mut location_stream = db
-        .location_stream(&username, start.to_utc(), stop.to_utc())
+        .location_stream(username, start.to_utc(), stop.to_utc())
         .await
         .map_err(|e| eyre!("Failed to get location stream: {}", e))?;
     let mut count = 0;
@@ -145,11 +145,7 @@ pub async fn export(
     Ok(())
 }
 
-async fn import_gps_logger_csv(
-    db: Arc<Db>,
-    path: PathBuf,
-    username: String,
-) -> Result<(usize, usize)> {
+async fn import_gps_logger_csv(db: Arc<Db>, path: &Path, username: &str) -> Result<(usize, usize)> {
     let mut added_count = 0;
     let mut skipped_count = 0;
     let iter = read_csv(path, username).map_err(|e| eyre!("Failed to read CSV file: {}", e))?;
@@ -170,8 +166,8 @@ async fn import_gps_logger_csv(
 pub async fn import(
     config: Config,
     format: ImportFormat,
-    path: PathBuf,
-    username: String,
+    path: &Path,
+    username: &str,
 ) -> Result<()> {
     println!(
         "Importing\n  format: {:?}\n  path: {}",
@@ -179,7 +175,7 @@ pub async fn import(
         path.display()
     );
     let db = Arc::new(
-        Db::new(config.db)
+        Db::new(&config.db)
             .await
             .map_err(|e| eyre!("Failed to connect to database: {}", e))?,
     );
@@ -225,8 +221,8 @@ mod tests {
             path: db_path,
             backups: 0,
         };
-        let db = Arc::new(Db::new(db_config).await.unwrap());
-        db.user_insert(&USERNAME.to_string(), &"password".to_string())
+        let db = Arc::new(Db::new(&db_config).await.unwrap());
+        db.user_insert(USERNAME.to_string(), "password".to_string())
             .await
             .unwrap();
         // insert the 3rd location to test that the import skips it and metrics are correct
@@ -246,10 +242,9 @@ mod tests {
         };
         db.location_insert(loc3.clone()).await.unwrap();
         // now import the CSV
-        let (added_count, skipped_count) =
-            import_gps_logger_csv(db.clone(), csv_path, USERNAME.to_string())
-                .await
-                .unwrap();
+        let (added_count, skipped_count) = import_gps_logger_csv(db.clone(), &csv_path, USERNAME)
+            .await
+            .unwrap();
         assert_eq!(added_count, 5);
         assert_eq!(skipped_count, 1);
         let locs = db

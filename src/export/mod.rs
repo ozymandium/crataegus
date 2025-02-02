@@ -2,7 +2,7 @@ use crate::export::gpx::GpxExporter;
 use crate::schema::Location;
 use clap::ValueEnum;
 use color_eyre::eyre::Result;
-use std::path::PathBuf;
+use std::path::Path;
 mod gpx;
 
 /// Filtypes that can be exported
@@ -35,8 +35,8 @@ pub trait Exporter {
 /// * `path`: Path to the file to write
 /// # Returns
 /// The exporter
-pub fn create_exporter(format: Format, name: &String, path: &PathBuf) -> Result<Box<dyn Exporter>> {
+pub fn create_exporter(format: Format, name: &str, path: &Path) -> Result<Box<dyn Exporter>> {
     match format {
-        Format::Gpx => Ok(Box::new(GpxExporter::new(name, &path)?)),
+        Format::Gpx => Ok(Box::new(GpxExporter::new(name, path)?)),
     }
 }

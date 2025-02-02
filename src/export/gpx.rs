@@ -27,15 +27,25 @@ use color_eyre::eyre::Result;
 use std::{
     fs::File,
     io::{BufWriter, Write},
-    path::PathBuf,
+    path::Path,
 };
 
+/// Writes a GPX file piecewise. XML is written in chunks to avoid having to keep the entire file
+/// in memory. This is a bit hacky, but a stream can be handled one line at a time, which is not
+/// possible with existing XML libraries. Writes the header, then locations, then the footer, all
+/// in sequence. Failure to call `finish` may result in a corrupted file.
 pub struct GpxExporter {
     writer: BufWriter<File>,
 }
 
 impl GpxExporter {
-    pub fn new(name: &String, path: &PathBuf) -> Result<Self> {
+    /// Create a new GPX exporter and writes the header to the file.
+    /// # Arguments
+    /// * `name`: The name of the track
+    /// * `path`: The path to the file to write
+    /// # Returns
+    /// The exporter
+    pub fn new(name: &str, path: &Path) -> Result<Self> {
         let file = File::create(path)?;
         let mut writer = BufWriter::new(file);
         let header = HEADER_FMT.replace("{track_name}", name);

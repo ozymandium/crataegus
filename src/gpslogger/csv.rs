@@ -2,7 +2,7 @@ use chrono::{DateTime, FixedOffset, Utc};
 use color_eyre::eyre::{eyre, Result};
 use serde::Deserialize;
 
-use std::{fs::File, path::PathBuf};
+use std::{fs::File, path::Path};
 
 use crate::gpslogger::deserializers::{
     deserialize_date_time_fixed_offset_from_str, deserialize_date_time_utc_from_sec,
@@ -127,9 +127,9 @@ struct Payload {
 }
 
 impl LocationGen for Payload {
-    fn to_location(&self, username: &String) -> Location {
+    fn to_location(&self, username: &str) -> Location {
         Location {
-            username: username.clone(),
+            username: username.to_string(),
             time_utc: self.time,
             time_local: self.time_offset,
             latitude: self.lat,
@@ -148,7 +148,8 @@ impl LocationGen for Payload {
 /// * `username` - The username to associate with the locations.
 /// # Return
 /// An iterator of `Location` structs.
-pub fn read_csv(path: PathBuf, username: String) -> Result<impl Iterator<Item = Result<Location>>> {
+pub fn read_csv(path: &Path, username: &str) -> Result<impl Iterator<Item = Result<Location>>> {
+    let username = username.to_string();
     let file = File::open(path).map_err(|e| eyre!("Failed to open CSV file: {}", e))?;
     let reader = csv::Reader::from_reader(file);
     let iter = reader
@@ -191,8 +192,7 @@ mod tests {
     async fn test_read_csv() {
         let file = create_csv();
         let path = file.path().to_path_buf();
-        let username = USERNAME.to_string();
-        let iter = read_csv(path, username).unwrap();
+        let iter = read_csv(&path, USERNAME).unwrap();
         let locations: Vec<Result<Location>> = iter.collect();
         assert_eq!(locations.len(), 6);
 

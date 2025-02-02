@@ -1,4 +1,4 @@
-use color_eyre::eyre::Result;
+use color_eyre::eyre::{ensure, Result};
 
 pub use location::Model as Location;
 pub use location::Source;
@@ -20,7 +20,7 @@ pub trait LocationGen {
     /// * `username` - The username to associate with the location.
     /// # Return
     /// A Location struct with the data from the struct.
-    fn to_location(&self, username: &String) -> Location;
+    fn to_location(&self, username: &str) -> Location;
 }
 
 pub mod user {
@@ -38,6 +38,20 @@ pub mod user {
     pub enum Relation {}
 
     impl ActiveModelBehavior for ActiveModel {}
+}
+
+impl SanityCheck for User {
+    fn sanity_check(&self) -> Result<()> {
+        ensure!(
+            self.username.len() <= 32,
+            format!("Username too long: {}", self.username)
+        );
+        ensure!(
+            self.password.len() <= 64,
+            format!("Password too long: {}", self.password)
+        );
+        Ok(())
+    }
 }
 
 pub mod location {
@@ -92,7 +106,6 @@ pub mod location {
 impl SanityCheck for Location {
     fn sanity_check(&self) -> Result<()> {
         use chrono::Utc;
-        use color_eyre::eyre::ensure;
         // float nan/inf checks
         ensure!(
             self.latitude.is_finite(),

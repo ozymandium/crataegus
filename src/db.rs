@@ -9,7 +9,10 @@ use sea_orm::{
 };
 use serde::Deserialize;
 
-use std::{iter::Iterator, path::PathBuf};
+use std::{
+    iter::Iterator,
+    path::{Path, PathBuf},
+};
 
 use crate::schema::{location, user, Location, SanityCheck};
 
@@ -38,7 +41,7 @@ impl Db {
     /// * `config` - The configuration for the database
     /// # Returns
     /// The database struct
-    pub async fn new(config: Config) -> Result<Self> {
+    pub async fn new(config: &Config) -> Result<Self> {
         // connecting with `c` option will create the file if it doesn't exist
         let url = format!("sqlite://{}?mode=rwc", config.path.display());
         let mut options = ConnectOptions::new(url);
@@ -66,7 +69,10 @@ impl Db {
         )
         .await
         .wrap_err("Failed to create the locations table")?;
-        Ok(Db { config, conn })
+        Ok(Db {
+            config: config.clone(),
+            conn,
+        })
     }
 
     //////////////////////
@@ -82,7 +88,7 @@ impl Db {
     ///     - Parent must not be root.
     /// # Returns
     /// `Ok(())` if the backup was successfully created, an error otherwise
-    async fn backup_to(&self, path: &PathBuf) -> Result<()> {
+    async fn backup_to(&self, path: &Path) -> Result<()> {
         // check that the path is absolute
         if !path.is_absolute() {
             return Err(eyre!("Backup path must be an absolute path: {:?}", path));
@@ -119,13 +125,19 @@ impl Db {
         Ok(())
     }
 
-    fn is_backup(&self, path_buf: &PathBuf) -> bool {
-        let path = path_buf.to_str().unwrap();
-        if !path.starts_with(&self.config.path.to_str().unwrap()) {
+    /// Check if the path is a backup file. Backup files are named as `db.sqlite.<ts>.bak`, where
+    /// `<ts>` is the current timestamp.
+    /// # Arguments
+    /// * `path` - The path to check
+    /// # Returns
+    /// `true` if the path is a backup file, `false` otherwise
+    fn is_backup(&self, path: &Path) -> bool {
+        let path = path.to_str().unwrap();
+        if !path.starts_with(self.config.path.to_str().unwrap()) {
             return false;
         }
         let suffix = path
-            .strip_prefix(&self.config.path.to_str().unwrap())
+            .strip_prefix(self.config.path.to_str().unwrap())
             .unwrap();
         let parts = suffix.split('.').collect::<Vec<_>>();
         parts.len() == 3 && parts[1].parse::<i64>().is_ok() && parts[2] == "bak"
@@ -170,11 +182,8 @@ impl Db {
     /// * `password` - The password to insert
     /// # Returns
     /// `Ok(())` if the user was successfully inserted, an error otherwise
-    pub async fn user_insert(&self, username: &String, password: &String) -> Result<()> {
-        let user = user::Model {
-            username: username.clone(),
-            password: password.clone(),
-        };
+    pub async fn user_insert(&self, username: String, password: String) -> Result<()> {
+        let user = user::Model { username, password };
         let active_user = user.into_active_model();
         active_user
             .insert(&self.conn)
@@ -190,14 +199,17 @@ impl Db {
     /// * `password` - The password to check
     /// # Returns
     /// `Ok(true)` if the user exists and the password matches, `Ok(false)` if the user does not
-    pub async fn user_check(&self, username: &String, password: &String) -> Result<bool> {
+    pub async fn user_check(&self, username: &str, password: &str) -> Result<bool> {
         let user = user::Entity::find()
             .filter(user::Column::Username.eq(username))
             .one(&self.conn)
             .await
             .wrap_err("Failed to query user from database")?;
         match user {
-            Some(user) => Ok(user.password == *password),
+            Some(user) => {
+                user.sanity_check()?;
+                Ok(user.password == *password)
+            }
             None => Ok(false),
         }
     }
@@ -259,7 +271,7 @@ impl Db {
     /// Locations that fall within the specified time range, in ascending order of time.
     pub async fn location_stream(
         &self,
-        username: &String,
+        username: &str,
         start: DateTime<Utc>,
         stop: DateTime<Utc>,
     ) -> Result<impl Stream<Item = Result<Location, DbErr>> + use<'_>, DbErr> {
@@ -273,7 +285,7 @@ impl Db {
     }
 
     #[cfg(test)]
-    pub async fn location_vec(
+    pub(crate) async fn location_vec(
         &self,
         username: &String,
         start: DateTime<Utc>,
@@ -321,7 +333,7 @@ mod tests {
         let db_file = NamedTempFile::new().unwrap();
         // having a file that exists ensures that the schema existence is checked when determining
         // whether to create the tables
-        let db = Db::new(Config {
+        let db = Db::new(&Config {
             path: db_file.path().to_path_buf(),
             backups: 1,
         })
@@ -329,7 +341,7 @@ mod tests {
         .unwrap();
         assert_eq!(db.location_count().await, 0);
         // add user to the database
-        db.user_insert(&"test".to_string(), &"pass".to_string())
+        db.user_insert("test".to_string(), "pass".to_string())
             .await
             .unwrap();
         let username = "test".to_string();
@@ -378,7 +390,7 @@ mod tests {
     #[tokio::test]
     async fn test_user_table() {
         let db_file = NamedTempFile::new().unwrap();
-        let db = Db::new(Config {
+        let db = Db::new(&Config {
             path: db_file.path().to_path_buf(),
             backups: 1,
         })
@@ -390,7 +402,7 @@ mod tests {
                 .unwrap(),
             false
         );
-        db.user_insert(&"user".to_string(), &"pass".to_string())
+        db.user_insert("user".to_string(), "pass".to_string())
             .await
             .unwrap();
         assert_eq!(
@@ -411,7 +423,7 @@ mod tests {
     #[tokio::test]
     async fn test_username_foreign_key_relation() {
         let db_file = NamedTempFile::new().unwrap();
-        let db = Db::new(Config {
+        let db = Db::new(&Config {
             path: db_file.path().to_path_buf(),
             backups: 1,
         })
@@ -436,7 +448,7 @@ mod tests {
         // insert the location should fail since no user exists
         assert!(db.location_insert(loc.clone()).await.is_err());
         // insert the user
-        db.user_insert(&valid_username, &"pass".to_string())
+        db.user_insert(valid_username, "pass".to_string())
             .await
             .unwrap();
         // insert the location should succeed now
@@ -449,7 +461,7 @@ mod tests {
     #[tokio::test]
     async fn test_is_backup() {
         let db_file = NamedTempFile::new().unwrap();
-        let db = Db::new(Config {
+        let db = Db::new(&Config {
             path: db_file.path().to_path_buf(),
             backups: 3,
         })
@@ -493,16 +505,16 @@ mod tests {
     async fn test_location_get() {
         use futures::StreamExt;
         let db_file = NamedTempFile::new().unwrap();
-        let db = Db::new(Config {
+        let db = Db::new(&Config {
             path: db_file.path().to_path_buf(),
             backups: 1,
         })
         .await
         .unwrap();
-        db.user_insert(&"user1".to_string(), &"pass".to_string())
+        db.user_insert("user1".to_string(), "pass".to_string())
             .await
             .unwrap();
-        db.user_insert(&"user2".to_string(), &"pass".to_string())
+        db.user_insert("user2".to_string(), "pass".to_string())
             .await
             .unwrap();
         let times = vec![
