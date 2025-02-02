@@ -43,6 +43,7 @@ Crataegus is built to ingest history from [GPSLogger](https://gpslogger.app), wh
         Feb 01 17:31:29 possum crataegus[2056310]: Run with RUST_BACKTRACE=full to include source snippets.
 
     - file had same owner as process user, permissions `rw-r--r--`
+- make the export command use `--flags` instead of positional args
 - add an info command
 - Documentation
 - network locations from GpsLogger will be in MSL
