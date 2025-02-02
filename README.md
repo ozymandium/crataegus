@@ -25,6 +25,24 @@ Crataegus is built to ingest history from [GPSLogger](https://gpslogger.app), wh
 - REST API: WIP
 
 ## To Do (for now)
+- error running:
+
+        Feb 01 17:31:29 possum crataegus[2056310]: The application panicked (crashed).
+        Feb 01 17:31:29 possum crataegus[2056310]: Message:  called `Result::unwrap()` on an `Err` value:
+        Feb 01 17:31:29 possum crataegus[2056310]:    0: Failed to insert location into database for unknown reason: Model { username: "roco", time_utc: 2025-02-02T00:31:25.661Z, time_local: 2025-02-01T17:31:25.661-07:00, latitude: 40.74104549093144, longitude: -111.84490499319296, altitude: 1398.9059597764328, accuracy: Some(76.45648), source: GpsLogger }
+        Feb 01 17:31:29 possum crataegus[2056310]:    1: Execution Error: error returned from database: (code: 14) unable to open database file
+        Feb 01 17:31:29 possum crataegus[2056310]:    2: error returned from database: (code: 14) unable to open database file
+        Feb 01 17:31:29 possum crataegus[2056310]:    3: error returned from database: (code: 14) unable to open database file
+        Feb 01 17:31:29 possum crataegus[2056310]:    4: (code: 14) unable to open database file
+        Feb 01 17:31:29 possum crataegus[2056310]: Location:
+        Feb 01 17:31:29 possum crataegus[2056310]:    /home/roco/.local/rust/cargo/git/checkouts/crataegus-54933e8cbc2396ab/d378ad8/src/db.rs:243
+        Feb 01 17:31:29 possum crataegus[2056310]: Backtrace omitted. Run with RUST_BACKTRACE=1 environment variable to display it.
+        Feb 01 17:31:29 possum crataegus[2056310]: Run with RUST_BACKTRACE=full to include source snippets.
+        Feb 01 17:31:29 possum crataegus[2056310]: Location: /home/roco/.local/rust/cargo/git/checkouts/crataegus-54933e8cbc2396ab/d378ad8/src/server.rs:120
+        Feb 01 17:31:29 possum crataegus[2056310]: Backtrace omitted. Run with RUST_BACKTRACE=1 environment variable to display it.
+        Feb 01 17:31:29 possum crataegus[2056310]: Run with RUST_BACKTRACE=full to include source snippets.
+
+    - file had same owner as process user, permissions `rw-r--r--`
 - add an info command
 - Documentation
 - network locations from GpsLogger will be in MSL

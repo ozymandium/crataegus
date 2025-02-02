@@ -156,7 +156,7 @@ async fn import_gps_logger_csv(
     for location in iter {
         let location = location.map_err(|e| eyre!("Failed to read location: {}", e))?;
         match db
-            .location_insert(location)
+            .location_insert(&location)
             .await
             .map_err(|e| eyre!("Failed to insert location: {}", e))?
         {
