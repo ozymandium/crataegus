@@ -71,7 +71,7 @@ impl Db {
         .wrap_err("Failed to create the locations table")?;
         Ok(Db {
             config: config.clone(),
-            conn: conn,
+            conn,
         })
     }
 
@@ -133,11 +133,11 @@ impl Db {
     /// `true` if the path is a backup file, `false` otherwise
     fn is_backup(&self, path: &Path) -> bool {
         let path = path.to_str().unwrap();
-        if !path.starts_with(&self.config.path.to_str().unwrap()) {
+        if !path.starts_with(self.config.path.to_str().unwrap()) {
             return false;
         }
         let suffix = path
-            .strip_prefix(&self.config.path.to_str().unwrap())
+            .strip_prefix(self.config.path.to_str().unwrap())
             .unwrap();
         let parts = suffix.split('.').collect::<Vec<_>>();
         parts.len() == 3 && parts[1].parse::<i64>().is_ok() && parts[2] == "bak"
@@ -183,10 +183,7 @@ impl Db {
     /// # Returns
     /// `Ok(())` if the user was successfully inserted, an error otherwise
     pub async fn user_insert(&self, username: String, password: String) -> Result<()> {
-        let user = user::Model {
-            username: username,
-            password: password,
-        };
+        let user = user::Model { username, password };
         let active_user = user.into_active_model();
         active_user
             .insert(&self.conn)

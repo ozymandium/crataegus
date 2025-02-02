@@ -35,8 +35,8 @@ pub trait Exporter {
 /// * `path`: Path to the file to write
 /// # Returns
 /// The exporter
-pub fn create_exporter(format: Format, name: &String, path: &PathBuf) -> Result<Box<dyn Exporter>> {
+pub fn create_exporter(format: Format, name: &str, path: &PathBuf) -> Result<Box<dyn Exporter>> {
     match format {
-        Format::Gpx => Ok(Box::new(GpxExporter::new(name, &path)?)),
+        Format::Gpx => Ok(Box::new(GpxExporter::new(name, path)?)),
     }
 }

@@ -205,9 +205,9 @@ impl LocationGen for Payload {
     /// * `username` - The username to associate with the location.
     /// # Return
     /// A Location struct with the data from the Payload struct.
-    fn to_location(&self, username: &String) -> Location {
+    fn to_location(&self, username: &str) -> Location {
         Location {
-            username: username.clone(),
+            username: username.to_string(),
             time_utc: self.time,
             time_local: self.timeoffset,
             latitude: self.lat,

@@ -20,7 +20,7 @@ pub trait LocationGen {
     /// * `username` - The username to associate with the location.
     /// # Return
     /// A Location struct with the data from the struct.
-    fn to_location(&self, username: &String) -> Location;
+    fn to_location(&self, username: &str) -> Location;
 }
 
 pub mod user {

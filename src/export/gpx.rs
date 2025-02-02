@@ -35,7 +35,7 @@ pub struct GpxExporter {
 }
 
 impl GpxExporter {
-    pub fn new(name: &String, path: &PathBuf) -> Result<Self> {
+    pub fn new(name: &str, path: &PathBuf) -> Result<Self> {
         let file = File::create(path)?;
         let mut writer = BufWriter::new(file);
         let header = HEADER_FMT.replace("{track_name}", name);

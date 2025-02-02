@@ -127,9 +127,9 @@ struct Payload {
 }
 
 impl LocationGen for Payload {
-    fn to_location(&self, username: &String) -> Location {
+    fn to_location(&self, username: &str) -> Location {
         Location {
-            username: username.clone(),
+            username: username.to_string(),
             time_utc: self.time,
             time_local: self.time_offset,
             latitude: self.lat,
