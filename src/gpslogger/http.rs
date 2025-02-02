@@ -250,7 +250,7 @@ mod tests {
         assert_eq!(payload.starttimestamp.timestamp(), 1737000139);
         assert_eq!(payload.date.to_string(), "2025-01-16");
         assert_eq!(payload.batt, 27.0);
-        assert_eq!(payload.ischarging, false);
+        assert!(!payload.ischarging);
         assert_eq!(payload.aid, "4ca9e1da592aca9b");
         assert_eq!(payload.ser, "4ca9e1da592aca9b");
         assert_eq!(payload.filename, "20250115");

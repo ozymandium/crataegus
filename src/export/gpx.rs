@@ -105,17 +105,14 @@ mod tests {
     fn test_gpx_exporter() {
         let tempfile = tempfile::NamedTempFile::new().unwrap();
         {
-            let mut exporter =
-                GpxExporter::new(&"test".to_string(), &tempfile.path().to_path_buf()).unwrap();
+            let mut exporter = GpxExporter::new("test", tempfile.path()).unwrap();
             exporter
                 .write_location(&Location {
                     username: "test".to_string(),
                     time_utc: DateTime::parse_from_rfc3339("2023-10-07T12:35:19Z")
                         .unwrap()
                         .into(),
-                    time_local: DateTime::parse_from_rfc3339("2023-10-07T12:35:19+02:00")
-                        .unwrap()
-                        .into(),
+                    time_local: DateTime::parse_from_rfc3339("2023-10-07T12:35:19+02:00").unwrap(),
                     latitude: 48.1173,
                     longitude: 11.5167,
                     altitude: 545.4,
@@ -129,9 +126,7 @@ mod tests {
                     time_utc: DateTime::parse_from_rfc3339("2023-10-07T12:35:29Z")
                         .unwrap()
                         .into(),
-                    time_local: DateTime::parse_from_rfc3339("2023-10-07T12:35:29+02:00")
-                        .unwrap()
-                        .into(),
+                    time_local: DateTime::parse_from_rfc3339("2023-10-07T12:35:29+02:00").unwrap(),
                     latitude: 48.1172,
                     longitude: 11.5168,
                     altitude: 546.0,
@@ -145,9 +140,7 @@ mod tests {
                     time_utc: DateTime::parse_from_rfc3339("2023-10-07T12:35:39Z")
                         .unwrap()
                         .into(),
-                    time_local: DateTime::parse_from_rfc3339("2023-10-07T12:35:39+02:00")
-                        .unwrap()
-                        .into(),
+                    time_local: DateTime::parse_from_rfc3339("2023-10-07T12:35:39+02:00").unwrap(),
                     latitude: 48.1175,
                     longitude: 11.5166,
                     altitude: 547.5,
