@@ -115,7 +115,7 @@ impl Server {
         debug!("gpslogger url payload: {:?}", payload);
         server
             .db
-            .location_insert(&LocationGen::to_location(&payload, &username))
+            .location_insert(LocationGen::to_location(&payload, &username))
             .await
             .unwrap();
         Response::new(Body::from("Request received"))

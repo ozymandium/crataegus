@@ -226,7 +226,7 @@ impl Db {
     /// # Returns
     /// `Ok(true)` if the location was successfully recorded, Ok(false) if the locations already exists in the database. An
     /// error otherwise.
-    pub async fn location_insert(&self, loc: &Location) -> Result<bool> {
+    pub async fn location_insert(&self, loc: Location) -> Result<bool> {
         loc.sanity_check()?;
         let active_loc = loc.clone().into_active_model();
         match active_loc.insert(&self.conn).await {
@@ -240,7 +240,7 @@ impl Db {
                         .await
                         .wrap_err("Failed to query original location when investigating duplicate")?
                         .ok_or_else(|| eyre!("Got unique constraint violation but couldn't find the original:\n{:?}", loc))?;
-                    if *loc == orig {
+                    if loc == orig {
                         debug!("Ignoring duplicate location entry: {:?}", loc);
                         Ok(false)
                     } else {
