@@ -5,7 +5,8 @@ use futures::Stream;
 use log::{debug, LevelFilter};
 use sea_orm::{
     error::DbErr, ActiveModelTrait, ColumnTrait, ConnectOptions, ConnectionTrait, Database,
-    DatabaseConnection, EntityTrait, IntoActiveModel, QueryFilter, QueryOrder, Schema, SqlErr,
+    DatabaseConnection, EntityTrait, IntoActiveModel, PaginatorTrait, QueryFilter, QueryOrder,
+    Schema, SqlErr,
 };
 use serde::Deserialize;
 
@@ -222,7 +223,10 @@ impl Db {
             .all(&self.conn)
             .await
             .wrap_err("Failed to query users from database")?;
-        let mut users = users.into_iter().map(|user| user.username).collect::<Vec<_>>();
+        let mut users = users
+            .into_iter()
+            .map(|user| user.username)
+            .collect::<Vec<_>>();
         users.sort();
         Ok(users)
     }
@@ -313,18 +317,36 @@ impl Db {
         Ok(vec)
     }
 
-    //////////////////
-    // Test Helpers //
-    //////////////////
-
-    /// Count the number of locations in the database
-    #[cfg(test)]
-    pub async fn location_count(&self) -> usize {
-        location::Entity::find()
-            .all(&self.conn)
-            .await
-            .unwrap()
-            .len()
+    /// Count the number of locations in the database. If username is provided, count only the
+    /// locations for that user.
+    /// # Arguments
+    /// * `username` - The username to count locations for. If None, count all locations.
+    /// # Returns
+    /// The number of locations in the database if the query was successful, an error otherwise.
+    pub async fn location_count(&self, username: Option<&str>) -> Result<u64> {
+        match username {
+            Some(username) => {
+                // ensure user exists
+                if user::Entity::find()
+                    .filter(user::Column::Username.eq(username))
+                    .one(&self.conn)
+                    .await
+                    .wrap_err(format!("Failed to query user {} from database", username))?
+                    .is_none()
+                {
+                    return Err(eyre!("User {} does not exist in the database", username));
+                }
+                Ok(location::Entity::find()
+                    .filter(location::Column::Username.eq(username))
+                    .count(&self.conn)
+                    .await
+                    .wrap_err(format!("Failed to count locations for user {}", username))?)
+            }
+            None => Ok(location::Entity::find()
+                .count(&self.conn)
+                .await
+                .wrap_err("Failed to count locations for all users")?),
+        }
     }
 }
 
@@ -352,7 +374,7 @@ mod tests {
         })
         .await
         .unwrap();
-        assert_eq!(db.location_count().await, 0);
+        assert_eq!(db.location_count(None).await.unwrap(), 0);
         // add user to the database
         db.user_insert("test".to_string(), "pass".to_string())
             .await
@@ -373,15 +395,15 @@ mod tests {
             source: location::Source::GpsLogger,
         };
         db.location_insert(loc.clone()).await.unwrap();
-        assert_eq!(db.location_count().await, 1); // successfully added the first entry
+        assert_eq!(db.location_count(None).await.unwrap(), 1); // successfully added the first entry
         db.location_insert(loc.clone()).await.unwrap(); // adding again does nothing
-        assert_eq!(db.location_count().await, 1);
+        assert_eq!(db.location_count(None).await.unwrap(), 1);
         let mut loc2 = loc.clone();
         loc2.time_utc += chrono::Duration::seconds(1); // modify the time to make it unique
         assert!(db.location_insert(loc2.clone()).await.is_err()); // but the 2 times don't match
         loc2.time_local += chrono::Duration::seconds(1); // now the times are unique and match
         db.location_insert(loc2.clone()).await.unwrap();
-        assert_eq!(db.location_count().await, 2); // successfully added the second entry
+        assert_eq!(db.location_count(None).await.unwrap(), 2); // successfully added the second entry
         let loc3 = Location {
             username,
             time_utc,
@@ -396,7 +418,7 @@ mod tests {
         assert!(err
             .to_string()
             .contains("Received user/time info that is duplicated, but other fields differ."));
-        assert_eq!(db.location_count().await, 2); // failed to add the third entry
+        assert_eq!(db.location_count(None).await.unwrap(), 2); // failed to add the third entry
     }
 
     /// Creates an ephemeral database and checks user table operations.
@@ -415,10 +437,7 @@ mod tests {
             .unwrap();
         assert_eq!(db.user_check("user", "pass").await.unwrap(), true);
         assert_eq!(db.user_check("user", "wrong").await.unwrap(), false);
-        assert_eq!(
-            db.user_check("nonexistent", "pass").await.unwrap(),
-            false
-        );
+        assert_eq!(db.user_check("nonexistent", "pass").await.unwrap(), false);
         assert_eq!(db.user_vec().await.unwrap(), vec!["user"]);
         db.user_insert("another_user".to_string(), "pass2".to_string())
             .await
@@ -645,5 +664,87 @@ mod tests {
             assert_eq!(loc, locs[expected_idx]);
             assert!(stream.next().await.is_none());
         }
+    }
+
+    #[tokio::test]
+    async fn test_location_count() {
+        let db_file = NamedTempFile::new().unwrap();
+        let db = Db::new(&Config {
+            path: db_file.path().to_path_buf(),
+            backups: 1,
+        })
+        .await
+        .unwrap();
+        assert_eq!(db.location_count(None).await.unwrap(), 0);
+        // should err for nonexistent user
+        assert!(db.location_count(Some("user1")).await.is_err());
+        db.user_insert("user1".to_string(), "pass".to_string())
+            .await
+            .unwrap();
+        assert_eq!(db.location_count(None).await.unwrap(), 0);
+        assert_eq!(db.location_count(Some("user1")).await.unwrap(), 0);
+        assert!(db.location_count(Some("user2")).await.is_err());
+        db.user_insert("user2".to_string(), "pass".to_string())
+            .await
+            .unwrap();
+        assert_eq!(db.location_count(None).await.unwrap(), 0);
+        db.location_insert(Location {
+            username: "user1".to_string(),
+            time_utc: DateTime::parse_from_rfc3339("2025-01-16T03:54:51.000Z")
+                .unwrap()
+                .with_timezone(&Utc),
+            time_local: DateTime::parse_from_rfc3339("2025-01-16T03:54:51.000Z")
+                .unwrap()
+                .with_timezone(&chrono::FixedOffset::west_opt(3600).unwrap()),
+            latitude: 0.0,
+            longitude: 0.0,
+            altitude: 0.0,
+            accuracy: Some(0.0),
+            source: location::Source::GpsLogger,
+        })
+        .await
+        .unwrap();
+        assert_eq!(db.location_count(None).await.unwrap(), 1);
+        assert_eq!(db.location_count(Some("user1")).await.unwrap(), 1);
+        assert_eq!(db.location_count(Some("user2")).await.unwrap(), 0);
+        assert!(db.location_count(Some("user3")).await.is_err());
+        db.location_insert(Location {
+            username: "user2".to_string(),
+            time_utc: DateTime::parse_from_rfc3339("2025-01-16T03:54:51.000Z")
+                .unwrap()
+                .with_timezone(&Utc),
+            time_local: DateTime::parse_from_rfc3339("2025-01-16T03:54:51.000Z")
+                .unwrap()
+                .with_timezone(&chrono::FixedOffset::west_opt(3600).unwrap()),
+            latitude: 0.0,
+            longitude: 0.0,
+            altitude: 0.0,
+            accuracy: Some(0.0),
+            source: location::Source::GpsLogger,
+        })
+        .await
+        .unwrap();
+        assert_eq!(db.location_count(None).await.unwrap(), 2);
+        assert_eq!(db.location_count(Some("user1")).await.unwrap(), 1);
+        assert_eq!(db.location_count(Some("user2")).await.unwrap(), 1);
+        db.location_insert(Location {
+            username: "user1".to_string(),
+            time_utc: DateTime::parse_from_rfc3339("2025-01-16T03:54:52.000Z")
+                .unwrap()
+                .with_timezone(&Utc),
+            time_local: DateTime::parse_from_rfc3339("2025-01-16T03:54:52.000Z")
+                .unwrap()
+                .with_timezone(&chrono::FixedOffset::west_opt(3600).unwrap()),
+            latitude: 0.0,
+            longitude: 0.0,
+            altitude: 0.0,
+            accuracy: Some(0.0),
+            source: location::Source::GpsLogger,
+        })
+        .await
+        .unwrap();
+        assert_eq!(db.location_count(None).await.unwrap(), 3);
+        assert_eq!(db.location_count(Some("user1")).await.unwrap(), 2);
+        assert_eq!(db.location_count(Some("user2")).await.unwrap(), 1);
     }
 }
