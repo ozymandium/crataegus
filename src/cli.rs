@@ -205,7 +205,13 @@ pub async fn info(config: Config, username: Option<&str>) -> Result<()> {
         .await
         .wrap_err("Failed to get user info")?;
     for user_info in user_infos {
-        println!("{:#?}", user_info);
+        let local_now = chrono::offset::Local::now();
+        let last_seen_local: Option<DateTime<Local>> = user_info
+            .last_seen
+            .map(|last_seen| last_seen.with_timezone(&local_now.offset()));
+        println!(user_info.username);
+        println!("  Total: {}", user_info.location_count);
+        println!("  Last seen: {}", last_seen_local);
     }
     Ok(())
 }
