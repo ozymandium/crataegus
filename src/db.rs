@@ -923,4 +923,75 @@ mod tests {
         );
         assert_eq!(loc.latitude, 1.0);
     }
+
+    #[tokio::test]
+    async fn test_info() {
+        let db_file = NamedTempFile::new().unwrap();
+        let db = Db::new(&Config {
+            path: db_file.path().to_path_buf(),
+            backups: 1,
+        })
+        .await
+        .unwrap();
+        db.user_insert("user1".to_string(), "pass".to_string())
+            .await
+            .unwrap();
+        db.user_insert("user2".to_string(), "pass".to_string())
+            .await
+            .unwrap();
+        for i in 1..3 {
+            for j in 1..3 {
+                db.location_insert(Location {
+                    username: format!("user{}", i),
+                    time_utc: DateTime::parse_from_rfc3339(
+                        format!("2025-01-16T03:54:5{}.000Z", j).as_str(),
+                    )
+                    .unwrap()
+                    .with_timezone(&Utc),
+                    time_local: DateTime::parse_from_rfc3339(
+                        format!("2025-01-16T03:54:5{}.000Z", j).as_str(),
+                    )
+                    .unwrap()
+                    .with_timezone(&chrono::FixedOffset::west_opt(3600).unwrap()),
+                    latitude: i as f64,
+                    longitude: 0.0,
+                    altitude: 0.0,
+                    accuracy: Some(0.0),
+                    source: location::Source::GpsLogger,
+                })
+                .await
+                .unwrap();
+            }
+        }
+        db.user_insert("user3".to_string(), "pass".to_string())
+            .await
+            .unwrap();
+        let info = db.info(None).await.unwrap();
+        assert_eq!(info.len(), 3);
+        assert_eq!(info[0].username, "user1");
+        assert_eq!(info[0].location_count, 2);
+        assert_eq!(info[1].username, "user2");
+        assert_eq!(info[1].location_count, 2);
+        assert_eq!(info[2].username, "user3");
+        assert_eq!(info[2].location_count, 0);
+        assert!(info[0].last_seen.is_some());
+        assert_eq!(
+            info[0].last_seen,
+            Some(
+                DateTime::parse_from_rfc3339("2025-01-16T03:54:52.000Z")
+                    .unwrap()
+                    .with_timezone(&Utc)
+            )
+        );
+        assert!(info[1].last_seen.is_some());
+        assert_eq!(
+            info[1].last_seen,
+            Some(
+                DateTime::parse_from_rfc3339("2025-01-16T03:54:52.000Z")
+                    .unwrap()
+                    .with_timezone(&Utc)
+            )
+        );
+        assert!(info[2].last_seen.is_none());
+    }
 }
