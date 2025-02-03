@@ -214,6 +214,19 @@ impl Db {
         }
     }
 
+    /// Get a list of all usernames in the database.
+    /// # Returns
+    /// A vector of usernames, sorted in ascending order
+    pub async fn user_vec(&self) -> Result<Vec<String>> {
+        let users = user::Entity::find()
+            .all(&self.conn)
+            .await
+            .wrap_err("Failed to query users from database")?;
+        let mut users = users.into_iter().map(|user| user.username).collect::<Vec<_>>();
+        users.sort();
+        Ok(users)
+    }
+
     ////////////////////////////////
     // Location-Related Functions //
     ////////////////////////////////
@@ -402,6 +415,15 @@ mod tests {
             .unwrap();
         assert_eq!(db.user_check("user", "pass").await.unwrap(), true);
         assert_eq!(db.user_check("user", "wrong").await.unwrap(), false);
+        assert_eq!(
+            db.user_check("nonexistent", "pass").await.unwrap(),
+            false
+        );
+        assert_eq!(db.user_vec().await.unwrap(), vec!["user"]);
+        db.user_insert("another_user".to_string(), "pass2".to_string())
+            .await
+            .unwrap();
+        assert_eq!(db.user_vec().await.unwrap(), vec!["another_user", "user"]);
     }
 
     // creates an ephemeral database and checks the username relation

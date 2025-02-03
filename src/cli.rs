@@ -193,6 +193,33 @@ pub async fn import(
     Ok(())
 }
 
+//pub async fn info(config: Config, username: Option<&str>) -> Result<()> {
+//    let db = Arc::new(
+//        Db::new(&config.db)
+//            .await
+//            .map_err(|e| eyre!("Failed to connect to database: {}", e))?,
+//    );
+//    let users = db.user_vec().await?;
+//    if let Some(username) = username {
+//        let user = users
+//            .iter()
+//            .find(|user| user.username == username)
+//            .ok_or_else(|| eyre!("User not found"))?;
+//        println!(
+//            "User: {}\n  Password: {}\n  Admin: {}",
+//            user.username, user.password, user.admin
+//        );
+//    } else {
+//        for user in users {
+//            println!(
+//                "User: {}\n  Password: {}\n  Admin: {}",
+//                user.username, user.password, user.admin
+//            );
+//        }
+//    }
+//    Ok(())
+//}
+
 #[cfg(test)]
 mod tests {
     use super::*;
