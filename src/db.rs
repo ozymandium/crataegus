@@ -301,6 +301,28 @@ impl Db {
         Ok(stream)
     }
 
+    /// Get a user location closest to, but not after, the specified time.
+    /// # Arguments
+    /// * `username` - The username to get the location for
+    /// * `time` - The time to get the location for. Time of returned location will be less than or
+    /// equal to this time.
+    /// # Returns
+    /// The location closest to, but not after, the specified time, if it exists.
+    pub async fn location_at(
+        &self,
+        username: &str,
+        time: &DateTime<Utc>,
+    ) -> Result<Option<Location>> {
+        let loc = location::Entity::find()
+            .filter(location::Column::Username.eq(username))
+            .filter(location::Column::TimeUtc.lte(*time))
+            .order_by_desc(location::Column::TimeUtc)
+            .one(&self.conn)
+            .await
+            .wrap_err("Failed to query location from database")?;
+        Ok(loc)
+    }
+
     #[cfg(test)]
     pub(crate) async fn location_vec(
         &self,
@@ -746,5 +768,112 @@ mod tests {
         assert_eq!(db.location_count(None).await.unwrap(), 3);
         assert_eq!(db.location_count(Some("user1")).await.unwrap(), 2);
         assert_eq!(db.location_count(Some("user2")).await.unwrap(), 1);
+    }
+
+    #[tokio::test]
+    async fn test_location_at() {
+        let db_file = NamedTempFile::new().unwrap();
+        let db = Db::new(&Config {
+            path: db_file.path().to_path_buf(),
+            backups: 1,
+        })
+        .await
+        .unwrap();
+        db.user_insert("user1".to_string(), "pass".to_string())
+            .await
+            .unwrap();
+        db.user_insert("user2".to_string(), "pass".to_string())
+            .await
+            .unwrap();
+        for i in 1..3 {
+            for j in 1..3 {
+                db.location_insert(Location {
+                    username: format!("user{}", i),
+                    time_utc: DateTime::parse_from_rfc3339(
+                        format!("2025-01-16T03:54:5{}.000Z", j).as_str(),
+                    )
+                    .unwrap()
+                    .with_timezone(&Utc),
+                    time_local: DateTime::parse_from_rfc3339(
+                        format!("2025-01-16T03:54:5{}.000Z", j).as_str(),
+                    )
+                    .unwrap()
+                    .with_timezone(&chrono::FixedOffset::west_opt(3600).unwrap()),
+                    latitude: i as f64,
+                    longitude: 0.0,
+                    altitude: 0.0,
+                    accuracy: Some(0.0),
+                    source: location::Source::GpsLogger,
+                })
+                .await
+                .unwrap();
+            }
+        }
+        assert_eq!(
+            db.location_at(
+                "user1",
+                &DateTime::parse_from_rfc3339("2025-01-16T03:54:50.000Z")
+                    .unwrap()
+                    .with_timezone(&Utc)
+            )
+            .await
+            .unwrap(),
+            None
+        );
+
+        let loc = db
+            .location_at(
+                "user1",
+                &DateTime::parse_from_rfc3339("2025-01-16T03:54:51.000Z")
+                    .unwrap()
+                    .with_timezone(&Utc),
+            )
+            .await
+            .unwrap()
+            .unwrap();
+        assert_eq!(loc.username, "user1");
+        assert_eq!(
+            loc.time_utc,
+            DateTime::parse_from_rfc3339("2025-01-16T03:54:51.000Z")
+                .unwrap()
+                .with_timezone(&Utc)
+        );
+        assert_eq!(loc.latitude, 1.0);
+        let loc = db
+            .location_at(
+                "user1",
+                &DateTime::parse_from_rfc3339("2025-01-16T03:54:51.500Z")
+                    .unwrap()
+                    .with_timezone(&Utc),
+            )
+            .await
+            .unwrap()
+            .unwrap();
+        assert_eq!(loc.username, "user1");
+        assert_eq!(
+            loc.time_utc,
+            DateTime::parse_from_rfc3339("2025-01-16T03:54:51.000Z")
+                .unwrap()
+                .with_timezone(&Utc)
+        );
+        assert_eq!(loc.latitude, 1.0);
+        let loc = db
+            .location_at(
+                "user1",
+                &DateTime::parse_from_rfc3339("2025-01-16T03:54:52.000Z")
+                    .unwrap()
+                    .with_timezone(&Utc),
+            )
+            .await
+            .unwrap()
+            .unwrap();
+        assert_eq!(loc.username, "user1");
+        assert_eq!(
+            loc.time_utc,
+            DateTime::parse_from_rfc3339("2025-01-16T03:54:52.000Z")
+                .unwrap()
+                .with_timezone(&Utc)
+        );
+        assert_eq!(loc.latitude, 1.0);
     }
 }
