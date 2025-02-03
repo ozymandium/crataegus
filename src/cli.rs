@@ -3,7 +3,7 @@ use std::sync::Arc;
 
 use chrono_english::parse_date_string;
 use clap::ValueEnum;
-use color_eyre::eyre::{eyre, Result};
+use color_eyre::eyre::{eyre, Result, WrapErr};
 use futures::StreamExt;
 use inquire::{Password, Text};
 use log::info;
@@ -190,6 +190,31 @@ pub async fn import(
         added_count,
         skipped_count
     );
+    Ok(())
+}
+
+pub async fn info(config: Config, username: Option<&str>) -> Result<()> {
+    use crate::db::UserInfo;
+    use chrono::{DateTime, Local};
+    let db = Arc::new(
+        Db::new(&config.db)
+            .await
+            .map_err(|e| eyre!("Failed to connect to database: {}", e))?,
+    );
+    let user_infos: Vec<UserInfo> = db
+        .info(username)
+        .await
+        .wrap_err("Failed to get user info")?;
+    for user_info in user_infos {
+        let last_seen_local = user_info.last_seen.map(DateTime::<Local>::from);
+        println!("{}", user_info.username);
+        println!("  Total: {}", user_info.location_count);
+        if let Some(last_seen) = last_seen_local {
+            println!("  Last seen: {}", last_seen);
+        } else {
+            println!("  Last seen: Never");
+        }
+    }
     Ok(())
 }
 

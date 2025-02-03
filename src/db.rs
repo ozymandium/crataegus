@@ -1,11 +1,11 @@
 use chrono::{DateTime, Utc};
 use color_eyre::eyre::{eyre, Result, WrapErr};
-//use futures::{Stream, StreamExt};
 use futures::Stream;
 use log::{debug, LevelFilter};
 use sea_orm::{
     error::DbErr, ActiveModelTrait, ColumnTrait, ConnectOptions, ConnectionTrait, Database,
-    DatabaseConnection, EntityTrait, IntoActiveModel, QueryFilter, QueryOrder, Schema, SqlErr,
+    DatabaseConnection, EntityTrait, IntoActiveModel, PaginatorTrait, QueryFilter, QueryOrder,
+    Schema, SqlErr,
 };
 use serde::Deserialize;
 
@@ -23,6 +23,17 @@ pub struct Config {
     pub path: PathBuf,
     /// Keep this many most recent backups
     pub backups: usize,
+}
+
+/// Struct to hold user information
+#[derive(Debug)]
+pub struct UserInfo {
+    /// Username of the user
+    pub username: String,
+    /// Number of locations for the user
+    pub location_count: u64,
+    /// Last time the user was seen
+    pub last_seen: Option<DateTime<Utc>>,
 }
 
 /// The database struct used by the server and the app. SQLite is used as the database backend, and
@@ -214,6 +225,22 @@ impl Db {
         }
     }
 
+    /// Get a list of all usernames in the database.
+    /// # Returns
+    /// A vector of usernames, sorted in ascending order
+    pub async fn user_vec(&self) -> Result<Vec<String>> {
+        let users = user::Entity::find()
+            .all(&self.conn)
+            .await
+            .wrap_err("Failed to query users from database")?;
+        let mut users = users
+            .into_iter()
+            .map(|user| user.username)
+            .collect::<Vec<_>>();
+        users.sort();
+        Ok(users)
+    }
+
     ////////////////////////////////
     // Location-Related Functions //
     ////////////////////////////////
@@ -284,6 +311,28 @@ impl Db {
         Ok(stream)
     }
 
+    /// Get a user location closest to, but not after, the specified time.
+    /// # Arguments
+    /// * `username` - The username to get the location for
+    /// * `time` - The time to get the location for. Time of returned location will be less than or
+    ///   equal to this time.
+    /// # Returns
+    /// The location closest to, but not after, the specified time, if it exists.
+    pub async fn location_at(
+        &self,
+        username: &str,
+        time: &DateTime<Utc>,
+    ) -> Result<Option<Location>> {
+        let loc = location::Entity::find()
+            .filter(location::Column::Username.eq(username))
+            .filter(location::Column::TimeUtc.lte(*time))
+            .order_by_desc(location::Column::TimeUtc)
+            .one(&self.conn)
+            .await
+            .wrap_err("Failed to query location from database")?;
+        Ok(loc)
+    }
+
     #[cfg(test)]
     pub(crate) async fn location_vec(
         &self,
@@ -300,18 +349,72 @@ impl Db {
         Ok(vec)
     }
 
-    //////////////////
-    // Test Helpers //
-    //////////////////
+    /// Count the number of locations in the database. If username is provided, count only the
+    /// locations for that user.
+    /// # Arguments
+    /// * `username` - The username to count locations for. If None, count all locations.
+    /// # Returns
+    /// The number of locations in the database if the query was successful, an error otherwise.
+    pub async fn location_count(&self, username: Option<&str>) -> Result<u64> {
+        match username {
+            Some(username) => {
+                // ensure user exists
+                if user::Entity::find()
+                    .filter(user::Column::Username.eq(username))
+                    .one(&self.conn)
+                    .await
+                    .wrap_err(format!("Failed to query user {} from database", username))?
+                    .is_none()
+                {
+                    return Err(eyre!("User {} does not exist in the database", username));
+                }
+                Ok(location::Entity::find()
+                    .filter(location::Column::Username.eq(username))
+                    .count(&self.conn)
+                    .await
+                    .wrap_err(format!("Failed to count locations for user {}", username))?)
+            }
+            None => Ok(location::Entity::find()
+                .count(&self.conn)
+                .await
+                .wrap_err("Failed to count locations for all users")?),
+        }
+    }
 
-    /// Count the number of locations in the database
-    #[cfg(test)]
-    pub async fn location_count(&self) -> usize {
-        location::Entity::find()
-            .all(&self.conn)
-            .await
-            .unwrap()
-            .len()
+    //////////////////////////
+    // High Level Functions //
+    //////////////////////////
+
+    /// Get information about all users in the database.
+    /// # Arguments
+    /// * `username` - The username to get information for. If None, get information for all users.
+    /// # Returns
+    /// A vector of user information structs.
+    pub async fn info(&self, username: Option<&str>) -> Result<Vec<UserInfo>> {
+        let users: Vec<String> = match username {
+            Some(username) => vec![username.to_string()],
+            None => self
+                .user_vec()
+                .await
+                .wrap_err("Failed to query user list from database")?,
+        };
+        let mut user_infos = Vec::new();
+        for username in users {
+            let count = self.location_count(Some(&username)).await?;
+            let last_seen = location::Entity::find()
+                .filter(location::Column::Username.eq(&username))
+                .order_by_desc(location::Column::TimeUtc)
+                .one(&self.conn)
+                .await
+                .wrap_err("Failed to query last seen location from database")?
+                .map(|loc| loc.time_utc);
+            user_infos.push(UserInfo {
+                username,
+                location_count: count,
+                last_seen,
+            });
+        }
+        Ok(user_infos)
     }
 }
 
@@ -339,7 +442,7 @@ mod tests {
         })
         .await
         .unwrap();
-        assert_eq!(db.location_count().await, 0);
+        assert_eq!(db.location_count(None).await.unwrap(), 0);
         // add user to the database
         db.user_insert("test".to_string(), "pass".to_string())
             .await
@@ -360,15 +463,15 @@ mod tests {
             source: location::Source::GpsLogger,
         };
         db.location_insert(loc.clone()).await.unwrap();
-        assert_eq!(db.location_count().await, 1); // successfully added the first entry
+        assert_eq!(db.location_count(None).await.unwrap(), 1); // successfully added the first entry
         db.location_insert(loc.clone()).await.unwrap(); // adding again does nothing
-        assert_eq!(db.location_count().await, 1);
+        assert_eq!(db.location_count(None).await.unwrap(), 1);
         let mut loc2 = loc.clone();
         loc2.time_utc += chrono::Duration::seconds(1); // modify the time to make it unique
         assert!(db.location_insert(loc2.clone()).await.is_err()); // but the 2 times don't match
         loc2.time_local += chrono::Duration::seconds(1); // now the times are unique and match
         db.location_insert(loc2.clone()).await.unwrap();
-        assert_eq!(db.location_count().await, 2); // successfully added the second entry
+        assert_eq!(db.location_count(None).await.unwrap(), 2); // successfully added the second entry
         let loc3 = Location {
             username,
             time_utc,
@@ -383,7 +486,7 @@ mod tests {
         assert!(err
             .to_string()
             .contains("Received user/time info that is duplicated, but other fields differ."));
-        assert_eq!(db.location_count().await, 2); // failed to add the third entry
+        assert_eq!(db.location_count(None).await.unwrap(), 2); // failed to add the third entry
     }
 
     /// Creates an ephemeral database and checks user table operations.
@@ -402,6 +505,12 @@ mod tests {
             .unwrap();
         assert_eq!(db.user_check("user", "pass").await.unwrap(), true);
         assert_eq!(db.user_check("user", "wrong").await.unwrap(), false);
+        assert_eq!(db.user_check("nonexistent", "pass").await.unwrap(), false);
+        assert_eq!(db.user_vec().await.unwrap(), vec!["user"]);
+        db.user_insert("another_user".to_string(), "pass2".to_string())
+            .await
+            .unwrap();
+        assert_eq!(db.user_vec().await.unwrap(), vec!["another_user", "user"]);
     }
 
     // creates an ephemeral database and checks the username relation
@@ -623,5 +732,265 @@ mod tests {
             assert_eq!(loc, locs[expected_idx]);
             assert!(stream.next().await.is_none());
         }
+    }
+
+    #[tokio::test]
+    async fn test_location_count() {
+        let db_file = NamedTempFile::new().unwrap();
+        let db = Db::new(&Config {
+            path: db_file.path().to_path_buf(),
+            backups: 1,
+        })
+        .await
+        .unwrap();
+        assert_eq!(db.location_count(None).await.unwrap(), 0);
+        // should err for nonexistent user
+        assert!(db.location_count(Some("user1")).await.is_err());
+        db.user_insert("user1".to_string(), "pass".to_string())
+            .await
+            .unwrap();
+        assert_eq!(db.location_count(None).await.unwrap(), 0);
+        assert_eq!(db.location_count(Some("user1")).await.unwrap(), 0);
+        assert!(db.location_count(Some("user2")).await.is_err());
+        db.user_insert("user2".to_string(), "pass".to_string())
+            .await
+            .unwrap();
+        assert_eq!(db.location_count(None).await.unwrap(), 0);
+        db.location_insert(Location {
+            username: "user1".to_string(),
+            time_utc: DateTime::parse_from_rfc3339("2025-01-16T03:54:51.000Z")
+                .unwrap()
+                .with_timezone(&Utc),
+            time_local: DateTime::parse_from_rfc3339("2025-01-16T03:54:51.000Z")
+                .unwrap()
+                .with_timezone(&chrono::FixedOffset::west_opt(3600).unwrap()),
+            latitude: 0.0,
+            longitude: 0.0,
+            altitude: 0.0,
+            accuracy: Some(0.0),
+            source: location::Source::GpsLogger,
+        })
+        .await
+        .unwrap();
+        assert_eq!(db.location_count(None).await.unwrap(), 1);
+        assert_eq!(db.location_count(Some("user1")).await.unwrap(), 1);
+        assert_eq!(db.location_count(Some("user2")).await.unwrap(), 0);
+        assert!(db.location_count(Some("user3")).await.is_err());
+        db.location_insert(Location {
+            username: "user2".to_string(),
+            time_utc: DateTime::parse_from_rfc3339("2025-01-16T03:54:51.000Z")
+                .unwrap()
+                .with_timezone(&Utc),
+            time_local: DateTime::parse_from_rfc3339("2025-01-16T03:54:51.000Z")
+                .unwrap()
+                .with_timezone(&chrono::FixedOffset::west_opt(3600).unwrap()),
+            latitude: 0.0,
+            longitude: 0.0,
+            altitude: 0.0,
+            accuracy: Some(0.0),
+            source: location::Source::GpsLogger,
+        })
+        .await
+        .unwrap();
+        assert_eq!(db.location_count(None).await.unwrap(), 2);
+        assert_eq!(db.location_count(Some("user1")).await.unwrap(), 1);
+        assert_eq!(db.location_count(Some("user2")).await.unwrap(), 1);
+        db.location_insert(Location {
+            username: "user1".to_string(),
+            time_utc: DateTime::parse_from_rfc3339("2025-01-16T03:54:52.000Z")
+                .unwrap()
+                .with_timezone(&Utc),
+            time_local: DateTime::parse_from_rfc3339("2025-01-16T03:54:52.000Z")
+                .unwrap()
+                .with_timezone(&chrono::FixedOffset::west_opt(3600).unwrap()),
+            latitude: 0.0,
+            longitude: 0.0,
+            altitude: 0.0,
+            accuracy: Some(0.0),
+            source: location::Source::GpsLogger,
+        })
+        .await
+        .unwrap();
+        assert_eq!(db.location_count(None).await.unwrap(), 3);
+        assert_eq!(db.location_count(Some("user1")).await.unwrap(), 2);
+        assert_eq!(db.location_count(Some("user2")).await.unwrap(), 1);
+    }
+
+    #[tokio::test]
+    async fn test_location_at() {
+        let db_file = NamedTempFile::new().unwrap();
+        let db = Db::new(&Config {
+            path: db_file.path().to_path_buf(),
+            backups: 1,
+        })
+        .await
+        .unwrap();
+        db.user_insert("user1".to_string(), "pass".to_string())
+            .await
+            .unwrap();
+        db.user_insert("user2".to_string(), "pass".to_string())
+            .await
+            .unwrap();
+        for i in 1..3 {
+            for j in 1..3 {
+                db.location_insert(Location {
+                    username: format!("user{}", i),
+                    time_utc: DateTime::parse_from_rfc3339(
+                        format!("2025-01-16T03:54:5{}.000Z", j).as_str(),
+                    )
+                    .unwrap()
+                    .with_timezone(&Utc),
+                    time_local: DateTime::parse_from_rfc3339(
+                        format!("2025-01-16T03:54:5{}.000Z", j).as_str(),
+                    )
+                    .unwrap()
+                    .with_timezone(&chrono::FixedOffset::west_opt(3600).unwrap()),
+                    latitude: i as f64,
+                    longitude: 0.0,
+                    altitude: 0.0,
+                    accuracy: Some(0.0),
+                    source: location::Source::GpsLogger,
+                })
+                .await
+                .unwrap();
+            }
+        }
+        assert_eq!(
+            db.location_at(
+                "user1",
+                &DateTime::parse_from_rfc3339("2025-01-16T03:54:50.000Z")
+                    .unwrap()
+                    .with_timezone(&Utc)
+            )
+            .await
+            .unwrap(),
+            None
+        );
+
+        let loc = db
+            .location_at(
+                "user1",
+                &DateTime::parse_from_rfc3339("2025-01-16T03:54:51.000Z")
+                    .unwrap()
+                    .with_timezone(&Utc),
+            )
+            .await
+            .unwrap()
+            .unwrap();
+        assert_eq!(loc.username, "user1");
+        assert_eq!(
+            loc.time_utc,
+            DateTime::parse_from_rfc3339("2025-01-16T03:54:51.000Z")
+                .unwrap()
+                .with_timezone(&Utc)
+        );
+        assert_eq!(loc.latitude, 1.0);
+        let loc = db
+            .location_at(
+                "user1",
+                &DateTime::parse_from_rfc3339("2025-01-16T03:54:51.500Z")
+                    .unwrap()
+                    .with_timezone(&Utc),
+            )
+            .await
+            .unwrap()
+            .unwrap();
+        assert_eq!(loc.username, "user1");
+        assert_eq!(
+            loc.time_utc,
+            DateTime::parse_from_rfc3339("2025-01-16T03:54:51.000Z")
+                .unwrap()
+                .with_timezone(&Utc)
+        );
+        assert_eq!(loc.latitude, 1.0);
+        let loc = db
+            .location_at(
+                "user1",
+                &DateTime::parse_from_rfc3339("2025-01-16T03:54:52.000Z")
+                    .unwrap()
+                    .with_timezone(&Utc),
+            )
+            .await
+            .unwrap()
+            .unwrap();
+        assert_eq!(loc.username, "user1");
+        assert_eq!(
+            loc.time_utc,
+            DateTime::parse_from_rfc3339("2025-01-16T03:54:52.000Z")
+                .unwrap()
+                .with_timezone(&Utc)
+        );
+        assert_eq!(loc.latitude, 1.0);
+    }
+
+    #[tokio::test]
+    async fn test_info() {
+        let db_file = NamedTempFile::new().unwrap();
+        let db = Db::new(&Config {
+            path: db_file.path().to_path_buf(),
+            backups: 1,
+        })
+        .await
+        .unwrap();
+        db.user_insert("user1".to_string(), "pass".to_string())
+            .await
+            .unwrap();
+        db.user_insert("user2".to_string(), "pass".to_string())
+            .await
+            .unwrap();
+        for i in 1..3 {
+            for j in 1..3 {
+                db.location_insert(Location {
+                    username: format!("user{}", i),
+                    time_utc: DateTime::parse_from_rfc3339(
+                        format!("2025-01-16T03:54:5{}.000Z", j).as_str(),
+                    )
+                    .unwrap()
+                    .with_timezone(&Utc),
+                    time_local: DateTime::parse_from_rfc3339(
+                        format!("2025-01-16T03:54:5{}.000Z", j).as_str(),
+                    )
+                    .unwrap()
+                    .with_timezone(&chrono::FixedOffset::west_opt(3600).unwrap()),
+                    latitude: i as f64,
+                    longitude: 0.0,
+                    altitude: 0.0,
+                    accuracy: Some(0.0),
+                    source: location::Source::GpsLogger,
+                })
+                .await
+                .unwrap();
+            }
+        }
+        db.user_insert("user3".to_string(), "pass".to_string())
+            .await
+            .unwrap();
+        let info = db.info(None).await.unwrap();
+        assert_eq!(info.len(), 3);
+        assert_eq!(info[0].username, "user1");
+        assert_eq!(info[0].location_count, 2);
+        assert_eq!(info[1].username, "user2");
+        assert_eq!(info[1].location_count, 2);
+        assert_eq!(info[2].username, "user3");
+        assert_eq!(info[2].location_count, 0);
+        assert!(info[0].last_seen.is_some());
+        assert_eq!(
+            info[0].last_seen,
+            Some(
+                DateTime::parse_from_rfc3339("2025-01-16T03:54:52.000Z")
+                    .unwrap()
+                    .with_timezone(&Utc)
+            )
+        );
+        assert!(info[1].last_seen.is_some());
+        assert_eq!(
+            info[1].last_seen,
+            Some(
+                DateTime::parse_from_rfc3339("2025-01-16T03:54:52.000Z")
+                    .unwrap()
+                    .with_timezone(&Utc)
+            )
+        );
+        assert!(info[2].last_seen.is_none());
     }
 }

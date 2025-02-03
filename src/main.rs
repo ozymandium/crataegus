@@ -4,8 +4,9 @@ use std::path::PathBuf;
 use clap::{Parser, Subcommand};
 use color_eyre::eyre::Result;
 use env_logger::{Builder as LogBuilder, Env as LogEnv};
+use log::info;
 
-use crataegus::cli::{backup, export, import, serve, useradd, Config, ImportFormat};
+use crataegus::cli::{backup, export, import, info, serve, useradd, Config, ImportFormat};
 use crataegus::export::Format as ExportFormat;
 
 /// Command line arguments
@@ -56,6 +57,11 @@ enum Cmd {
         /// The username to associate with the imported data
         username: String,
     },
+    Info {
+        /// Optionally specify a username to get info for
+        #[clap(short, long)]
+        username: Option<String>,
+    },
 }
 
 /// Configure the logging system with env_logger. Call this function at the beginning of main.
@@ -85,10 +91,10 @@ async fn main() -> Result<()> {
     setup_logging();
 
     let args = Args::parse();
-    println!("{:#?}", args);
+    info!("{:#?}", args);
 
     let config = Config::load(&args.config)?;
-    println!("{:#?}", config);
+    info!("{:#?}", config);
 
     match args.cmd {
         Cmd::Serve => serve(config).await?,
@@ -106,6 +112,7 @@ async fn main() -> Result<()> {
             path,
             username,
         } => import(config, format, &path, &username).await?,
+        Cmd::Info { username } => info(config, username.as_deref()).await?,
     }
 
     Ok(())
