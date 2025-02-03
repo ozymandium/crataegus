@@ -206,9 +206,7 @@ pub async fn info(config: Config, username: Option<&str>) -> Result<()> {
         .await
         .wrap_err("Failed to get user info")?;
     for user_info in user_infos {
-        let last_seen_local: Option<DateTime<Local>> = user_info
-            .last_seen
-            .map(|last_seen| DateTime::<Local>::from(last_seen));
+        let last_seen_local = user_info.last_seen.map(DateTime::<Local>::from);
         println!("{}", user_info.username);
         println!("  Total: {}", user_info.location_count);
         if let Some(last_seen) = last_seen_local {

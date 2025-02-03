@@ -1,6 +1,5 @@
 use chrono::{DateTime, Utc};
 use color_eyre::eyre::{eyre, Result, WrapErr};
-//use futures::{Stream, StreamExt};
 use futures::Stream;
 use log::{debug, LevelFilter};
 use sea_orm::{
@@ -316,7 +315,7 @@ impl Db {
     /// # Arguments
     /// * `username` - The username to get the location for
     /// * `time` - The time to get the location for. Time of returned location will be less than or
-    /// equal to this time.
+    ///   equal to this time.
     /// # Returns
     /// The location closest to, but not after, the specified time, if it exists.
     pub async fn location_at(
