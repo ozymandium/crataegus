@@ -3,7 +3,7 @@ use std::sync::Arc;
 
 use chrono_english::parse_date_string;
 use clap::ValueEnum;
-use color_eyre::eyre::{eyre, Result};
+use color_eyre::eyre::{eyre, Result, WrapErr};
 use futures::StreamExt;
 use inquire::{Password, Text};
 use log::info;
@@ -193,32 +193,22 @@ pub async fn import(
     Ok(())
 }
 
-//pub async fn info(config: Config, username: Option<&str>) -> Result<()> {
-//    let db = Arc::new(
-//        Db::new(&config.db)
-//            .await
-//            .map_err(|e| eyre!("Failed to connect to database: {}", e))?,
-//    );
-//    let users = db.user_vec().await?;
-//    if let Some(username) = username {
-//        let user = users
-//            .iter()
-//            .find(|user| user.username == username)
-//            .ok_or_else(|| eyre!("User not found"))?;
-//        println!(
-//            "User: {}\n  Password: {}\n  Admin: {}",
-//            user.username, user.password, user.admin
-//        );
-//    } else {
-//        for user in users {
-//            println!(
-//                "User: {}\n  Password: {}\n  Admin: {}",
-//                user.username, user.password, user.admin
-//            );
-//        }
-//    }
-//    Ok(())
-//}
+pub async fn info(config: Config, username: Option<&str>) -> Result<()> {
+    use crate::db::UserInfo;
+    let db = Arc::new(
+        Db::new(&config.db)
+            .await
+            .map_err(|e| eyre!("Failed to connect to database: {}", e))?,
+    );
+    let user_infos: Vec<UserInfo> = db
+        .info(username)
+        .await
+        .wrap_err("Failed to get user info")?;
+    for user_info in user_infos {
+        println!("{:#?}", user_info);
+    }
+    Ok(())
+}
 
 #[cfg(test)]
 mod tests {

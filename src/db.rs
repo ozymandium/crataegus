@@ -26,6 +26,17 @@ pub struct Config {
     pub backups: usize,
 }
 
+/// Struct to hold user information
+#[derive(Debug)]
+pub struct UserInfo {
+    /// Username of the user
+    pub username: String,
+    /// Number of locations for the user
+    pub location_count: u64,
+    /// Last time the user was seen
+    pub last_seen: Option<DateTime<Utc>>,
+}
+
 /// The database struct used by the server and the app. SQLite is used as the database backend, and
 /// all storage happens through this struct.
 pub struct Db {
@@ -369,6 +380,42 @@ impl Db {
                 .await
                 .wrap_err("Failed to count locations for all users")?),
         }
+    }
+
+    //////////////////////////
+    // High Level Functions //
+    //////////////////////////
+
+    /// Get information about all users in the database.
+    /// # Arguments
+    /// * `username` - The username to get information for. If None, get information for all users.
+    /// # Returns
+    /// A vector of user information structs.
+    pub async fn info(&self, username: Option<&str>) -> Result<Vec<UserInfo>> {
+        let users: Vec<String> = match username {
+            Some(username) => vec![username.to_string()],
+            None => self
+                .user_vec()
+                .await
+                .wrap_err("Failed to query user list from database")?,
+        };
+        let mut user_infos = Vec::new();
+        for username in users {
+            let count = self.location_count(Some(&username)).await?;
+            let last_seen = location::Entity::find()
+                .filter(location::Column::Username.eq(&username))
+                .order_by_desc(location::Column::TimeUtc)
+                .one(&self.conn)
+                .await
+                .wrap_err("Failed to query last seen location from database")?
+                .map(|loc| loc.time_utc);
+            user_infos.push(UserInfo {
+                username,
+                location_count: count,
+                last_seen,
+            });
+        }
+        Ok(user_infos)
     }
 }
 
