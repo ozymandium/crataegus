@@ -333,8 +333,8 @@ impl Db {
         Ok(loc)
     }
 
-    #[cfg(test)]
-    pub(crate) async fn location_vec(
+    //#[cfg(test)]
+    pub async fn location_vec(
         &self,
         username: &str,
         start: DateTime<Utc>,
