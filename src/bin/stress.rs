@@ -25,8 +25,8 @@ async fn worker(db: Arc<Db>) {
             latitude: 0.0,
             longitude: 0.0,
             altitude: 0.0,
-            time_utc: time_utc,
-            time_local: time_local,
+            time_utc,
+            time_local,
             source: Source::GpsLogger,
             accuracy: None,
         })
@@ -52,7 +52,7 @@ async fn main() {
 
     let mut handles = vec![];
 
-    for i in 0..100 {
+    for _i in 0..100 {
         let handle = tokio::spawn(worker(db.clone()));
         handles.push(handle);
     }

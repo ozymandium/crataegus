@@ -61,6 +61,20 @@ impl Db {
             .await
             .wrap_err("Failed to connect to the database")?;
         let schema = Schema::new(conn.get_database_backend());
+        // enable write-ahead logging to help with concurrency
+        conn.execute(sea_orm::Statement::from_string(
+            conn.get_database_backend(),
+            "PRAGMA journal_mode = WAL".to_string(),
+        ))
+        .await
+        .wrap_err("Failed to enable write-ahead logging")?;
+        // set the busy timeout to 5 seconds
+        conn.execute(sea_orm::Statement::from_string(
+            conn.get_database_backend(),
+            "PRAGMA busy_timeout = 5000".to_string(),
+        ))
+        .await
+        .wrap_err("Failed to set busy timeout")?;
         // add all the tables
         conn.execute(
             conn.get_database_backend().build(
