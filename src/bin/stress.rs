@@ -16,6 +16,25 @@ struct Args {
     db: std::path::PathBuf,
 }
 
+async fn worker(db: Arc<Db>) {
+    for _ in 0..1000 {
+        let time_utc = chrono::Utc::now();
+        let time_local = time_utc.with_timezone(&chrono::FixedOffset::east_opt(2 * 3600).unwrap());
+        db.location_insert(Location {
+            username: "test".to_string(),
+            latitude: 0.0,
+            longitude: 0.0,
+            altitude: 0.0,
+            time_utc: time_utc,
+            time_local: time_local,
+            source: Source::GpsLogger,
+            accuracy: None,
+        })
+        .await
+        .unwrap();
+    }
+}
+
 #[tokio::main]
 async fn main() {
     let args = Args::parse();
@@ -34,26 +53,7 @@ async fn main() {
     let mut handles = vec![];
 
     for i in 0..100 {
-        let db = db.clone();
-        let handle = tokio::spawn(async move {
-            for j in 0..1000 {
-                let time_utc = chrono::Utc::now();
-                let time_local =
-                    time_utc.with_timezone(&chrono::FixedOffset::east_opt(2 * 3600).unwrap());
-                db.location_insert(Location {
-                    username: "test".to_string(),
-                    latitude: 0.0,
-                    longitude: 0.0,
-                    altitude: 0.0,
-                    time_utc: time_utc,
-                    time_local: time_local,
-                    source: Source::GpsLogger,
-                    accuracy: None,
-                })
-                .await
-                .unwrap();
-            }
-        });
+        let handle = tokio::spawn(worker(db.clone()));
         handles.push(handle);
     }
 
