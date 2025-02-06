@@ -124,7 +124,10 @@ impl Server {
             .location_insert(LocationGen::to_location(&payload, &username))
             .await
             .unwrap();
-        Response::new(Body::from("Request received"))
+        Response::builder()
+            .status(200)
+            .body(Body::from("Location received"))
+            .unwrap()
     }
 
     async fn handle_fallback(request: Request<Body>) -> Response<Body> {
